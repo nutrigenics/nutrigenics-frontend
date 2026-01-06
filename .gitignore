@@ -1,0 +1,10 @@
+.env
+env/*
+venv/*
+logs/*
+dist/*
+node_modules/*
+.DS_Store
+.claude
+media/*
+
