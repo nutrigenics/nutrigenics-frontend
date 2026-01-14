@@ -12,8 +12,9 @@ export interface Message {
 }
 
 export const chatService = {
-    async getMessages() {
-        const response = await apiClient.get('/api/v1/messages/');
+    async getMessages(otherUserId?: number) {
+        const params = otherUserId ? { other_user_id: otherUserId } : {};
+        const response = await apiClient.get('/api/v1/messages/', { params });
         return response.data.results || response.data; // Handle pagination if present
     },
 

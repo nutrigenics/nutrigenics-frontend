@@ -17,8 +17,10 @@ export default function MyDietitianChatPage() {
   const [dietitian, setDietitian] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initial fetch
+  // Initial fetch & polling
   useEffect(() => {
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
     const init = async () => {
       setIsLoading(true);
       try {
@@ -26,9 +28,26 @@ export default function MyDietitianChatPage() {
         const dietData = await dietitianService.getMyDietitian();
         setDietitian(dietData.dietitian);
 
-        // Fetch Messages
-        const msgs = await chatService.getMessages();
-        setMessages(msgs);
+        // Fetch Messages (filtered by dietitian's user ID)
+        if (dietData.dietitian?.user?.id) {
+          const msgs = await chatService.getMessages(dietData.dietitian.user.id);
+          setMessages(msgs);
+
+          // Start polling with the dietitian's user ID
+          // Poll every 3 seconds (Optimized for API Chat)
+          intervalId = setInterval(async () => {
+            try {
+              const newMsgs = await chatService.getMessages(dietData.dietitian.user.id);
+              setMessages(prev => {
+                // Only update if length changed or last message different to avoid jitters
+                if (newMsgs.length !== prev.length || newMsgs[newMsgs.length - 1]?.id !== prev[prev.length - 1]?.id) {
+                  return newMsgs;
+                }
+                return prev;
+              });
+            } catch (e) { console.error("Polling error", e); }
+          }, 3000);
+        }
       } catch (e) {
         console.error("Failed to load chat", e);
       } finally {
@@ -37,18 +56,9 @@ export default function MyDietitianChatPage() {
     };
     init();
 
-    // Polling every 5 seconds
-    const interval = setInterval(async () => {
-      try {
-        const msgs = await chatService.getMessages();
-        setMessages(prev => {
-          if (JSON.stringify(prev) !== JSON.stringify(msgs)) return msgs;
-          return prev;
-        });
-      } catch (e) { console.error("Polling error", e); }
-    }, 5000);
-
-    return () => clearInterval(interval);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   // Scroll to bottom on new messages
@@ -58,17 +68,33 @@ export default function MyDietitianChatPage() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !dietitian) return;
+    if (!newMessage.trim() || !dietitian?.user?.id) return;
 
+    const tempContent = newMessage;
+    setNewMessage(''); // Clear input immediately
     setIsSending(true);
+
+    // Optimistic Update
+    const optimisticMessage: Message = {
+      id: Date.now(),
+      sender: 0, // Unknown ID temporarily
+      sender_email: "", // User's email
+      receiver: dietitian.user.id,
+      receiver_email: dietitian.user.email,
+      content: tempContent,
+      timestamp: new Date().toISOString(),
+      is_read: false
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
+
     try {
-      await chatService.sendMessage(newMessage, dietitian.user.id);
-      setNewMessage('');
-      const msgs = await chatService.getMessages();
+      await chatService.sendMessage(tempContent, dietitian.user.id);
+      const msgs = await chatService.getMessages(dietitian.user.id);
       setMessages(msgs);
     } catch (error) {
       console.error('Send failed:', error);
       alert('Failed to send message');
+      // Revert optimistic update could be done here
     } finally {
       setIsSending(false);
     }

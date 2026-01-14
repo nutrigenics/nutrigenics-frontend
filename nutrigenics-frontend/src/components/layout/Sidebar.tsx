@@ -1,7 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { useNotifications } from '@/context/NotificationContext';
 import {
     LayoutDashboard,
     Calendar,
@@ -16,7 +15,6 @@ import {
     UserCog,
     MessageSquare,
     Settings,
-    Bell,
     Building2,
     FileText,
 } from 'lucide-react';
@@ -60,7 +58,6 @@ const hospitalNavItems = [
 ];
 
 const commonNavItems = [
-    { name: 'Notifications', href: '/notifications', icon: Bell },
     { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -68,7 +65,6 @@ export function Sidebar({ isMobileOpen, onMobileClose, pendingRequestsCount = 0 
     const location = useLocation();
     const navigate = useNavigate();
     const { logout, user } = useAuth();
-    const { unreadCount } = useNotifications();
 
     // Determine which nav items to show based on user role
     const getNavItems = () => {
@@ -165,11 +161,6 @@ export function Sidebar({ isMobileOpen, onMobileClose, pendingRequestsCount = 0 
                                                 {item.href === '/my-dietitian' && pendingRequestsCount > 0 && (
                                                     <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground shadow-sm animate-pulse border-2 border-sidebar">
                                                         {pendingRequestsCount}
-                                                    </span>
-                                                )}
-                                                {item.href === '/notifications' && unreadCount > 0 && (
-                                                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground shadow-sm animate-pulse border-2 border-sidebar">
-                                                        {unreadCount}
                                                     </span>
                                                 )}
                                             </Link>

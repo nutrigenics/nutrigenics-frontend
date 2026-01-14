@@ -1,9 +1,9 @@
 // MainLayout removed
 // import { MainLayout } from '@/layouts/MainLayout';
-import { User, Award, Book, MapPin, Edit2, Camera, Loader2, Save } from 'lucide-react';
+import { User, Award, MapPin, Edit2, Camera, Loader2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { dietitianDashboardService } from '@/services/dietitian-dashboard.service';
@@ -24,13 +24,10 @@ export default function DietitianProfilePage() {
       const data = await dietitianDashboardService.getMe();
       setProfile(data);
       setFormData({
-        fname: data.user.first_name,
-        lname: data.user.last_name,
-        email: data.user.email, // Email usually not editable here
+        fname: data.fname || '',
+        lname: data.lname || '',
+        email: data.email || '',
         place: data.place || '',
-        // Add other fields as per model. Does Dietitian model have bio/specializations?
-        // Assuming Dietitian model has fields like 'place', 'bio', etc. 
-        // If not, we handle what's available.
       });
     } catch (error) {
       console.error("Failed to fetch profile", error);
@@ -94,7 +91,7 @@ export default function DietitianProfilePage() {
             <div className="relative">
               <div className="w-32 h-32 rounded-[2rem] bg-gray-100 flex items-center justify-center border-4 border-white shadow-lg overflow-hidden">
                 <div className="text-4xl font-bold text-gray-400">
-                  {profile?.user.first_name[0]}{profile?.user.last_name[0]}
+                  {profile?.fname?.[0] || 'D'}{profile?.lname?.[0] || 'T'}
                 </div>
               </div>
               <Button size="icon" className="absolute -bottom-2 -right-2 rounded-xl h-10 w-10 bg-gray-900 text-white hover:bg-gray-800 shadow-lg border-2 border-white">
@@ -104,7 +101,7 @@ export default function DietitianProfilePage() {
 
             <div className="flex-1 text-center md:text-left">
               <h1 className="text-3xl font-black text-gray-900 mb-1">
-                Dr. {profile?.user.first_name} {profile?.user.last_name}
+                {profile?.fname} {profile?.lname}
               </h1>
               <p className="text-gray-500 font-medium mb-3">Dietitian • {profile?.hospital?.name || 'Independent'}</p>
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
@@ -144,7 +141,7 @@ export default function DietitianProfilePage() {
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">First Name</label>
                 <Input
                   name="fname"
-                  value={formData.fname}
+                  value={formData.fname || ''}
                   onChange={handleInputChange}
                   disabled={!isEditing}
                   className="bg-gray-50 border-gray-200"
@@ -154,7 +151,7 @@ export default function DietitianProfilePage() {
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Last Name</label>
                 <Input
                   name="lname"
-                  value={formData.lname}
+                  value={formData.lname || ''}
                   onChange={handleInputChange}
                   disabled={!isEditing}
                   className="bg-gray-50 border-gray-200"
@@ -164,7 +161,7 @@ export default function DietitianProfilePage() {
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Location</label>
                 <Input
                   name="place"
-                  value={formData.place}
+                  value={formData.place || ''}
                   onChange={handleInputChange}
                   disabled={!isEditing}
                   className="bg-gray-50 border-gray-200"
@@ -172,7 +169,7 @@ export default function DietitianProfilePage() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Email</label>
-                <Input value={formData.email} disabled className="bg-gray-50 border-gray-200 opacity-70" />
+                <Input value={formData.email || ''} disabled className="bg-gray-50 border-gray-200 opacity-70" />
               </div>
             </div>
           </div>
@@ -181,28 +178,22 @@ export default function DietitianProfilePage() {
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm">
             <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Book className="w-5 h-5" /> Professional Bio
+              <Award className="w-5 h-5" /> Professional Info
             </h3>
             <div className="space-y-4">
-              {/* <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Specializations</label>
-                <div className="flex flex-wrap gap-2">
-                  {["Weight Management", "Sports Nutrition", "Diabetes Care"].map(tag => (
-                    <span key={tag} className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded-full">{tag}</span>
-                  ))}
-                  {isEditing && (
-                    <button className="px-3 py-1 border border-dashed border-gray-300 text-gray-400 text-xs font-bold rounded-full hover:border-gray-400 hover:text-gray-500 transition-colors">+ Add</button>
-                  )}
-                </div>
-              </div> */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">About Me</label>
-                <Textarea
-                  className="w-full h-32 p-4 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
-                  disabled={!isEditing}
-                  placeholder="Tell us about your experience..."
-                  defaultValue="Dedicated registered dietitian helping clients achieve their health goals."
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Hospital / Clinic</label>
+                <Input
+                  value={profile?.hospital_name || profile?.hospital?.name || 'Independent Practice'}
+                  disabled
+                  className="bg-gray-50 border-gray-200 opacity-70"
                 />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Status</label>
+                <div className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-bold ${profile?.is_approved ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  {profile?.is_approved ? 'Verified & Approved' : 'Pending Approval'}
+                </div>
               </div>
             </div>
           </div>

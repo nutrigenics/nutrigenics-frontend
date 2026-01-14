@@ -5,10 +5,14 @@ export interface BaseUser {
     first_name?: string;
     last_name?: string;
     role: 'patient' | 'dietitian' | 'hospital';
+    patient?: {
+        patient_id?: string;
+    };
 }
 
 export interface Patient {
     id: number;
+    patient_id?: string;
     fname: string;
     lname: string;
     date_of_birth: string;
@@ -17,12 +21,19 @@ export interface Patient {
     weight: number;
     email: string;
     phone_number?: string;
+    place?: string;
     dietary_preferences?: string[];
     allergies?: string[];
     health_conditions?: string[];
     activity_level?: string;
     goal?: string;
     profile_image?: string;
+    user?: {
+        id: number;
+        email: string;
+        first_name?: string;
+        last_name?: string;
+    };
     nutrient_targets?: {
         calories: number;
         protein: number;

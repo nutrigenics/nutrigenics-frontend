@@ -11,14 +11,11 @@ import { AuthCard } from '@/components/auth/AuthCard';
 import { AuthHeader } from '@/components/auth/AuthHeader';
 import { AuthFooter } from '@/components/auth/AuthFooter';
 
-const GUEST_CREDENTIALS = {
-    email: 'user@testing.com',
-    password: 'User123@testing'
-};
+
 
 export default function LoginPage() {
     const navigate = useNavigate();
-    const { login } = useAuth();
+    const { login, guestLogin } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -51,7 +48,7 @@ export default function LoginPage() {
         try {
             setIsLoading(true);
             setError(null);
-            const isOnboarded = await login(GUEST_CREDENTIALS.email, GUEST_CREDENTIALS.password);
+            const isOnboarded = await guestLogin();
             if (isOnboarded) {
                 navigate('/');
             } else {

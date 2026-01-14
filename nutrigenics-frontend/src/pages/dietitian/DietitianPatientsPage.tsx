@@ -1,33 +1,95 @@
-// MainLayout removed
-// import { MainLayout } from '@/layouts/MainLayout';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, User, TrendingUp, MessageSquare, Activity, Calendar, Loader2 } from 'lucide-react';
+import { Search, User, TrendingUp, MessageSquare, Activity, Calendar, Loader2, Clock, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { dietitianDashboardService } from '@/services/dietitian-dashboard.service';
 import { Link } from 'react-router-dom';
 import type { Patient } from '@/types';
 
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
+import apiClient from '@/services/api.client';
+
+interface PendingRequest {
+  id: number;
+  patient_details: {
+    name: string;
+    fname: string;
+    lname: string;
+    email: string;
+  };
+  message: string;
+  status: string;
+  created_at: string;
+}
+
 export default function DietitianPatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
 
+  // Request Patient Modal State
+  const [isRequestOpen, setIsRequestOpen] = useState(false);
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [requestForm, setRequestForm] = useState({
+    patient_id: '',
+    message: ''
+  });
+
   useEffect(() => {
-    fetchPatients();
+    fetchData();
   }, [search]);
 
-  const fetchPatients = async () => {
+  const fetchData = async () => {
     try {
-      // Debounce need? For now, simple fetch.
-      const data = await dietitianDashboardService.getPatients(search);
-      setPatients(Array.isArray(data) ? data : data.results || []);
+      const [patientsData, requestsData] = await Promise.all([
+        dietitianDashboardService.getPatients(search),
+        apiClient.get('/api/v1/dietitian-requests/')
+      ]);
+
+      setPatients(Array.isArray(patientsData) ? patientsData : patientsData.results || []);
+
+      // Filter pending requests
+      const requests = requestsData.data.results || requestsData.data || [];
+      setPendingRequests(requests.filter((r: PendingRequest) => r.status === 'pending'));
     } catch (error) {
-      console.error("Failed to fetch patients", error);
+      console.error("Failed to fetch data", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRequestPatient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!requestForm.patient_id.trim()) {
+      toast.error("Please enter a Patient ID");
+      return;
+    }
+
+    setIsRequesting(true);
+    try {
+      await apiClient.post('/api/v1/dietitian-requests/', {
+        patient_id: requestForm.patient_id.trim(),
+        message: requestForm.message
+      });
+
+      toast.success("Connection request sent!");
+      setIsRequestOpen(false);
+      setRequestForm({ patient_id: '', message: '' });
+      fetchData(); // Refresh to show new pending request
+    } catch (error: any) {
+      console.error("Failed to send request", error);
+      const errorMsg = error.response?.data?.patient_id ||
+        error.response?.data?.detail ||
+        "Failed to send request. Please check the Patient ID.";
+      toast.error(Array.isArray(errorMsg) ? errorMsg[0] : errorMsg);
+    } finally {
+      setIsRequesting(false);
     }
   };
 
@@ -79,13 +141,13 @@ export default function DietitianPatientsPage() {
               Monitor progress, update plans, and stay connected.
             </motion.p>
           </div>
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            className="w-full md:w-auto"
-          >
-            <div className="relative group">
+          <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="relative group w-full md:w-auto"
+            >
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-logo transition-colors" />
               <Input
                 type="text"
@@ -94,16 +156,65 @@ export default function DietitianPatientsPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-12 h-14 w-full md:w-80 bg-gray-50 border-gray-200 focus:border-logo/50 focus:ring-4 focus:ring-logo/10 rounded-2xl shadow-inner text-base"
               />
-            </div>
-          </motion.div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Button onClick={() => setIsRequestOpen(true)} className="h-14 px-8 rounded-2xl bg-gray-900 text-white font-bold shadow-lg hover:bg-gray-800 w-full md:w-auto">
+                <UserPlus className="w-5 h-5 mr-2" />
+                Add Patient
+              </Button>
+            </motion.div>
+          </div>
         </div>
       </div>
 
-      {/* Patients List */}
+      {/* Pending Requests Section */}
+      {pendingRequests.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <div className="mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Pending Requests</h2>
+            <p className="text-gray-500">Waiting for patient approval</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pendingRequests.map((req) => (
+              <Card key={req.id} className="p-5 rounded-2xl border-orange-100 bg-orange-50/30">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-orange-100 border border-orange-200 flex items-center justify-center text-orange-600">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-gray-900 truncate">
+                      {req.patient_details?.fname || 'Patient'} {req.patient_details?.lname || ''}
+                    </h3>
+                    <p className="text-sm text-gray-500 truncate">{req.patient_details?.email || 'Awaiting response'}</p>
+                    <p className="text-xs text-orange-600 mt-1">Pending since {new Date(req.created_at).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Connected Patients List */}
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-gray-900">Connected Patients</h2>
+        <p className="text-gray-500">Patients who have accepted your request</p>
+      </div>
       <div className="grid grid-cols-1 gap-4">
         {patients.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground bg-gray-50 rounded-2xl border-dashed border-2">
-            No patients found.
+            No connected patients yet.
+            <Button variant="link" onClick={() => setIsRequestOpen(true)} className="mt-2 text-primary font-bold">
+              Send a connection request
+            </Button>
           </div>
         ) : (
           patients.map((patient, index) => (
@@ -117,60 +228,39 @@ export default function DietitianPatientsPage() {
                 <div className="flex flex-col md:flex-row items-center gap-6">
                   {/* Avatar */}
                   <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center text-2xl font-black border-4 bg-white ${getRandomColor(patient.id)}`}>
-                    {patient.fname[0]}{patient.lname[0]}
+                    {patient.fname?.[0] || '?'}{patient.lname?.[0] || ''}
                   </div>
 
                   {/* Info */}
                   <div className="flex-1 text-center md:text-left space-y-2">
-                    <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">
-                      <h3 className="text-xl font-bold text-gray-900">{patient.fname} {patient.lname}</h3>
-                      <span className={`px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider inline-block self-center md:self-auto bg-green-100 text-green-700`}>
-                        Active
+                    <h3 className="text-xl font-bold text-gray-900">{patient.fname} {patient.lname}</h3>
+                    <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <User className="w-4 h-4" /> {patient.patient_id || 'N/A'}
                       </span>
-                    </div>
-                    <p className="text-gray-500 font-medium">{patient.email}</p>
-                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm text-gray-500 mt-3">
-                      <span className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                        <Activity className="w-4 h-4 text-gray-400" />
-                        {/* Note: dietary_preferences is string[] in type, but code expected object array. Checking serializer... */}
-                        {/* Serializer sends CuisineSerializer which has {id, name}. So type Patient needs update or usage check */}
-                        {/* PatientProfileSerializer sends 'diet_preference' as DietSerializer list -> {id, name} */}
-                        {((patient.dietary_preferences as any) || []).map((d: any) => d.name).join(', ') || 'General'}
-                      </span>
-                      <span className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        Plan Active
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Progress (Placeholder) */}
-                  <div className="w-full md:w-48">
-                    <div className="flex justify-between items-end mb-2">
-                      <span className="text-sm font-bold text-gray-500">Goal Progress</span>
-                      <span className="text-lg font-black text-gray-900">--%</span>
-                    </div>
-                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `0%` }}
-                        className={`h-full rounded-full bg-gray-300`}
-                      />
+                      {patient.place && (
+                        <span className="flex items-center gap-1">
+                          <Activity className="w-4 h-4" /> {patient.place}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2 w-full md:w-auto">
-                    <Link to={`/dietitian/patients/${patient.id}/analytics`} className="flex-1 md:flex-none">
-                      <Button variant="outline" className="w-full border-gray-200 hover:bg-gray-50 text-gray-700 font-bold h-12 rounded-xl">
-                        <TrendingUp className="w-4 h-4 mr-2" />
-                        Analytics
+                  <div className="flex flex-wrap justify-center gap-3 w-full md:w-auto">
+                    <Link to={`/dietitian/patients/${patient.id}/analytics`}>
+                      <Button variant="outline" className="h-12 px-5 rounded-xl border-gray-200 hover:bg-gray-50 font-semibold text-gray-700">
+                        <TrendingUp className="w-4 h-4 mr-2" /> Analytics
                       </Button>
                     </Link>
-                    <Link to={`/dietitian/chats`} className="flex-1 md:flex-none">
-                      <Button className="w-full bg-gray-900 text-white hover:bg-gray-800 font-bold h-12 rounded-xl shadow-lg shadow-gray-900/10">
-                        Message
-                        <MessageSquare className="w-4 h-4 ml-2" />
+                    <Link to={`/dietitian/patients/${patient.id}/chat`}>
+                      <Button variant="outline" className="h-12 px-5 rounded-xl border-gray-200 hover:bg-gray-50 font-semibold text-gray-700">
+                        <MessageSquare className="w-4 h-4 mr-2" /> Chat
+                      </Button>
+                    </Link>
+                    <Link to={`/dietitian/patients/${patient.id}/plan`}>
+                      <Button className="h-12 px-6 rounded-xl bg-gray-900 text-white font-semibold shadow-lg hover:bg-gray-800">
+                        <Calendar className="w-4 h-4 mr-2" /> Plan
                       </Button>
                     </Link>
                   </div>
@@ -180,6 +270,49 @@ export default function DietitianPatientsPage() {
           ))
         )}
       </div>
+
+      {/* Request Patient Dialog */}
+      <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
+        <DialogContent className="sm:max-w-md rounded-3xl p-8">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-center">Add Patient by ID</DialogTitle>
+            <DialogDescription className="text-center">
+              Enter the patient's unique ID to send them a connection request.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRequestPatient} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="patientId">Patient ID</Label>
+              <Input
+                id="patientId"
+                type="text"
+                required
+                placeholder="e.g., patient-01"
+                value={requestForm.patient_id}
+                onChange={e => setRequestForm({ ...requestForm, patient_id: e.target.value })}
+                className="rounded-xl h-12 font-mono"
+              />
+              <p className="text-xs text-muted-foreground">Ask your patient to share their ID from their dashboard.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="message">Message (Optional)</Label>
+              <Textarea
+                id="message"
+                placeholder="Hello! I'm your dietitian and would like to connect with you..."
+                value={requestForm.message}
+                onChange={e => setRequestForm({ ...requestForm, message: e.target.value })}
+                className="rounded-xl min-h-[80px]"
+              />
+            </div>
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setIsRequestOpen(false)} className="rounded-xl h-12 px-6">Cancel</Button>
+              <Button type="submit" disabled={isRequesting} className="rounded-xl h-12 px-8 bg-gray-900 text-white font-bold">
+                {isRequesting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Request'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

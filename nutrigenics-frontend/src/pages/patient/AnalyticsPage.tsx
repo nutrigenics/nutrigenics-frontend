@@ -14,8 +14,8 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, RadarChart, PolarGrid,
-  PolarAngleAxis, PolarRadiusAxis, Radar, AreaChart, Area,
-  ComposedChart, Line
+  PolarAngleAxis, PolarRadiusAxis, Radar, LineChart, Line, Area,
+  ComposedChart
 } from 'recharts';
 import {
   Loader2, Flame, Utensils,
@@ -148,14 +148,18 @@ export default function AnalyticsPage() {
 
   const trendData = useMemo(() => stats?.dates.map((date, i) => ({
     date: period === 'weekly' ? stats.weekdays?.[i] : date.slice(5),
-    Protein: stats.macro_nutrients.find(n => n.name === 'Protein')?.data[i] || 0,
-    Carbs: stats.macro_nutrients.find(n => n.name === 'Carbohydrates')?.data[i] || 0,
-    Fat: stats.macro_nutrients.find(n => n.name === 'Fat')?.data[i] || 0,
     Calories: stats.calories[i] || 0,
-    Target: advanced?.tdee || 2000,
-    Sugar: stats.limiting_nutrients.find(n => n.name === 'Sugar')?.data[i] || 0,
+    Protein: stats.macro_nutrients.find(n => n.name === 'Protein')?.data[i] || 0,
+    Carbohydrates: stats.macro_nutrients.find(n => n.name === 'Carbohydrates')?.data[i] || 0,
+    Fat: stats.macro_nutrients.find(n => n.name === 'Fat')?.data[i] || 0,
     Fiber: stats.macro_nutrients.find(n => n.name === 'Fiber')?.data[i] || 0,
-  })) || [], [stats, period, advanced]);
+    Sugar: stats.limiting_nutrients.find(n => n.name === 'Sugar')?.data[i] || 0,
+    Sodium: stats.micro_nutrients.find(n => n.name === 'Sodium')?.data[i] || 0,
+    Cholesterol: stats.micro_nutrients.find(n => n.name === 'Cholesterol')?.data[i] || 0,
+    'Saturated Fat': stats.limiting_nutrients.find(n => n.name === 'Saturated Fat')?.data[i] || 0,
+    'Unsaturated Fat': stats.limiting_nutrients.find(n => n.name === 'Unsaturated Fat')?.data[i] || 0,
+    'Trans-fat': stats.limiting_nutrients.find(n => n.name === 'Trans-fat')?.data[i] || 0,
+  })) || [], [stats, period]);
 
   const fatData = useMemo(() => [
     { name: 'Saturated', value: stats?.limiting_nutrients.find(n => n.name === 'Saturated Fat')?.data.reduce((a, b) => a + b, 0) || 0 },
@@ -426,46 +430,40 @@ export default function AnalyticsPage() {
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  Daily Trends
+                  All Nutrients Daily Trends
                   <TooltipProvider>
                     <ShadTooltip>
                       <TooltipTrigger>
                         <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p className="max-w-[200px]">Tracks your intake of Protein, Carbohydrates, and Fats over the selected period.</p>
+                        <p className="max-w-[200px]">Tracks all 11 nutrients over the selected period. Hover to see values.</p>
                       </TooltipContent>
                     </ShadTooltip>
                   </TooltipProvider>
                 </CardTitle>
-                <CardDescription>Protein, Carbs & Fat over time</CardDescription>
+                <CardDescription>All nutrients over time (scroll legend to see all)</CardDescription>
               </CardHeader>
               <CardContent className="h-100">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="protGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={COLORS.emerald.start} stopOpacity={0.6} />
-                        <stop offset="95%" stopColor={COLORS.emerald.end} stopOpacity={0.05} />
-                      </linearGradient>
-                      <linearGradient id="carbGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={COLORS.amber.start} stopOpacity={0.6} />
-                        <stop offset="95%" stopColor={COLORS.amber.end} stopOpacity={0.05} />
-                      </linearGradient>
-                      <linearGradient id="fatGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={COLORS.coral.start} stopOpacity={0.6} />
-                        <stop offset="95%" stopColor={COLORS.coral.end} stopOpacity={0.05} />
-                      </linearGradient>
-                    </defs>
+                  <LineChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                     <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
                     <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Area type="monotone" dataKey="Protein" stackId="1" stroke={COLORS.emerald.start} fill="url(#protGrad)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="Carbs" stackId="1" stroke={COLORS.amber.start} fill="url(#carbGrad)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="Fat" stackId="1" stroke={COLORS.coral.start} fill="url(#fatGrad)" strokeWidth={2} />
-                  </AreaChart>
+                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                    <Line type="monotone" dataKey="Calories" stroke="#6366f1" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="Protein" stroke={COLORS.emerald.start} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="Carbohydrates" stroke={COLORS.amber.start} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="Fat" stroke={COLORS.coral.start} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="Fiber" stroke="#8b5cf6" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="Sugar" stroke="#ec4899" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="Sodium" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="Cholesterol" stroke="#f97316" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="Saturated Fat" stroke="#ef4444" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="Unsaturated Fat" stroke="#22c55e" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="Trans-fat" stroke="#78716c" strokeWidth={1.5} dot={false} />
+                  </LineChart>
                 </ResponsiveContainer>
               </CardContent>
               <InsightBox type={macroInsight.type === 'info' ? 'info' : macroInsight.type} icon={macroInsight.type === 'good' ? CheckCircle2 : Lightbulb}>
@@ -715,19 +713,77 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {[
-                      ...stats?.macro_nutrients.map(n => ({ ...n, limit: n.name === 'Protein' ? proteinTarget : n.name === 'Fiber' ? fiberTarget : null, isMinimum: n.name === 'Protein' || n.name === 'Fiber' })) || [],
-                      ...stats?.micro_nutrients.map(n => ({ ...n, limit: n.name === 'Sodium' ? 2300 : n.name === 'Cholesterol' ? 300 : null, isMinimum: false })) || [],
-                      ...stats?.limiting_nutrients.map(n => ({ ...n, limit: n.name === 'Sugar' ? 50 : n.name === 'Saturated Fat' ? 20 : null, isMinimum: false })) || []
+                      ...stats?.macro_nutrients.map(n => {
+                        // Set proper defaults for each nutrient
+                        let defaultLimit = null;
+                        let defaultUnit = 'g';
+                        let isMinimum = false;
+
+                        if (n.name === 'Calories') {
+                          defaultLimit = advanced?.tdee || 2000;
+                          defaultUnit = 'kcal';
+                          isMinimum = false; // Calories is a target, not a minimum
+                        } else if (n.name === 'Protein') {
+                          defaultLimit = proteinTarget;
+                          isMinimum = true;
+                        } else if (n.name === 'Fiber') {
+                          defaultLimit = fiberTarget;
+                          isMinimum = true;
+                        } else if (n.name === 'Carbohydrates') {
+                          defaultLimit = 300; // General recommendation
+                          isMinimum = false;
+                        } else if (n.name === 'Fat') {
+                          defaultLimit = 65; // General recommendation
+                          isMinimum = false;
+                        }
+
+                        return {
+                          ...n,
+                          limit: stats?.nutrient_limits?.[n.name]?.daily ?? defaultLimit,
+                          isMinimum,
+                          unit: stats?.nutrient_limits?.[n.name]?.unit || defaultUnit
+                        };
+                      }) || [],
+                      ...stats?.micro_nutrients.map(n => ({
+                        ...n,
+                        limit: stats?.nutrient_limits?.[n.name]?.daily ?? (n.name === 'Sodium' ? 2300 : n.name === 'Cholesterol' ? 300 : null),
+                        isMinimum: false,
+                        unit: stats?.nutrient_limits?.[n.name]?.unit || 'mg'
+                      })) || [],
+                      ...stats?.limiting_nutrients.map(n => ({
+                        ...n,
+                        limit: stats?.nutrient_limits?.[n.name]?.daily ?? (n.name === 'Sugar' ? 50 : n.name === 'Saturated Fat' ? 20 : n.name === 'Trans-fat' ? 2 : null),
+                        isMinimum: false,
+                        unit: stats?.nutrient_limits?.[n.name]?.unit || 'g'
+                      })) || []
                     ].map((n) => {
-                      const avg = (n.data.reduce((a, b) => a + b, 0) || 0) / days;
+                      const avg = (n.data.reduce((a: number, b: number) => a + b, 0) || 0) / days;
                       const limit = n.limit;
-                      const unit = ['Sodium', 'Cholesterol'].includes(n.name) ? 'mg' : 'g';
+                      const unit = n.unit || 'g';
                       let statusColor = 'bg-emerald-100 text-emerald-700';
                       let statusText = 'Good';
                       let StatusIcon = CheckCircle2;
+                      let targetPrefix = n.isMinimum ? '≥' : '≤';
 
                       if (limit) {
-                        if (n.isMinimum) {
+                        // Special handling for Calories (target-based instead of limit-based)
+                        if (n.name === 'Calories') {
+                          targetPrefix = '≈'; // Target, not a limit
+                          const ratio = avg / limit;
+                          if (ratio >= 0.9 && ratio <= 1.1) {
+                            statusColor = 'bg-emerald-100 text-emerald-700';
+                            statusText = 'On Target';
+                            StatusIcon = CheckCircle2;
+                          } else if (ratio < 0.9) {
+                            statusColor = 'bg-blue-100 text-blue-700';
+                            statusText = 'Under';
+                            StatusIcon = TrendingDown;
+                          } else {
+                            statusColor = 'bg-amber-100 text-amber-700';
+                            statusText = 'Over';
+                            StatusIcon = TrendingUp;
+                          }
+                        } else if (n.isMinimum) {
                           if (avg < limit * 0.8) { statusColor = 'bg-amber-100 text-amber-700'; statusText = 'Low'; StatusIcon = AlertCircle; }
                         } else {
                           if (avg > limit) { statusColor = 'bg-rose-100 text-rose-700'; statusText = 'High'; StatusIcon = AlertTriangle; }
@@ -739,7 +795,7 @@ export default function AnalyticsPage() {
                         <tr key={n.name} className="hover:bg-gray-50/50 transition-colors">
                           <td className="py-4 px-6 font-medium text-gray-800">{n.name}</td>
                           <td className="text-right py-4 px-6 text-gray-600">{avg.toFixed(1)} {unit}</td>
-                          <td className="text-right py-4 px-6 text-gray-400">{limit ? `${n.isMinimum ? '≥' : '≤'} ${limit} ${unit}` : '-'}</td>
+                          <td className="text-right py-4 px-6 text-gray-400">{limit ? `${targetPrefix} ${limit} ${unit}` : '-'}</td>
                           <td className="text-center py-4 px-6">
                             <span className={cn("inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium", statusColor)}>
                               <StatusIcon className="w-3.5 h-3.5" />
@@ -764,52 +820,59 @@ export default function AnalyticsPage() {
           <Card className="shadow-sm">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[1200px]">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-600">Date</th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-600">Meals</th>
-                      <th className="text-right py-4 px-6 font-semibold text-gray-600">Calories</th>
-                      <th className="text-right py-4 px-6 font-semibold text-gray-600">Protein</th>
-                      <th className="text-right py-4 px-6 font-semibold text-gray-600">Carbs</th>
-                      <th className="text-right py-4 px-6 font-semibold text-gray-600">Fat</th>
+                      <th className="text-left py-4 px-4 font-semibold text-gray-600 sticky left-0 bg-gray-50">Date</th>
+                      <th className="text-left py-4 px-4 font-semibold text-gray-600">Meals</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Cal</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Protein</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Carbs</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Fat</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Fiber</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Sugar</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Sodium</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Chol</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Sat Fat</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Unsat</th>
+                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Trans</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {history.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center py-12 text-muted-foreground">No meal data for this period</td>
+                        <td colSpan={13} className="text-center py-12 text-muted-foreground">No meal data for this period</td>
                       </tr>
                     ) : (
                       history.map((day) => (
                         <tr key={day.date} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="py-4 px-6">
+                          <td className="py-3 px-4 sticky left-0 bg-white">
                             <div className="font-medium text-gray-800">{day.weekday}</div>
                             <div className="text-xs text-muted-foreground">{day.date}</div>
                           </td>
-                          <td className="py-4 px-6">
-                            <div className="flex flex-wrap gap-1.5">
-                              {day.meals.slice(0, 3).map((meal, i) => (
-                                <span key={i} className="inline-flex items-center rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                                  <span className="capitalize text-gray-400 mr-1">{meal.meal_type}:</span>
-                                  {meal.name.length > 18 ? meal.name.slice(0, 18) + '…' : meal.name}
+                          <td className="py-3 px-4">
+                            <div className="flex flex-wrap gap-1">
+                              {day.meals.slice(0, 2).map((meal, i) => (
+                                <span key={i} className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                                  {meal.name.length > 12 ? meal.name.slice(0, 12) + '…' : meal.name}
                                 </span>
                               ))}
-                              {day.meals.length > 3 && (
-                                <span className="text-xs text-muted-foreground px-2 py-1">+{day.meals.length - 3} more</span>
+                              {day.meals.length > 2 && (
+                                <span className="text-xs text-muted-foreground">+{day.meals.length - 2}</span>
                               )}
                             </div>
                           </td>
-                          <td className="text-right py-4 px-6 font-semibold text-gray-800">{day.total_calories.toLocaleString()}</td>
-                          <td className="text-right py-4 px-6">
-                            <span className="text-emerald-600 font-medium">{day.total_protein}g</span>
-                          </td>
-                          <td className="text-right py-4 px-6">
-                            <span className="text-amber-600 font-medium">{day.total_carbs}g</span>
-                          </td>
-                          <td className="text-right py-4 px-6">
-                            <span className="text-rose-500 font-medium">{day.total_fat}g</span>
-                          </td>
+                          <td className="text-right py-3 px-3 font-semibold text-gray-800">{day.total_calories}</td>
+                          <td className="text-right py-3 px-3 text-emerald-600">{day.total_protein}g</td>
+                          <td className="text-right py-3 px-3 text-amber-600">{day.total_carbohydrates}g</td>
+                          <td className="text-right py-3 px-3 text-rose-500">{day.total_fat}g</td>
+                          <td className="text-right py-3 px-3 text-violet-600">{day.total_fiber}g</td>
+                          <td className="text-right py-3 px-3 text-pink-500">{day.total_sugar}g</td>
+                          <td className="text-right py-3 px-3 text-blue-500">{day.total_sodium}mg</td>
+                          <td className="text-right py-3 px-3 text-orange-500">{day.total_cholesterol}mg</td>
+                          <td className="text-right py-3 px-3 text-red-400">{day.total_saturated_fat}g</td>
+                          <td className="text-right py-3 px-3 text-green-500">{day.total_unsaturated_fat}g</td>
+                          <td className="text-right py-3 px-3 text-gray-500">{day.total_trans_fat}g</td>
                         </tr>
                       ))
                     )}

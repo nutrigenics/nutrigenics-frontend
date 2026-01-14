@@ -29,7 +29,7 @@ export function ProtectedRoute({ role, redirectTo = '/login' }: ProtectedRoutePr
     if (role && user?.role !== role) {
         // Redirect to appropriate dashboard based on user role
         const dashboardRoutes = {
-            patient: '/',
+            patient: '/dashboard',
             dietitian: '/dietitian/dashboard',
             hospital: '/hospital/dashboard',
         };
