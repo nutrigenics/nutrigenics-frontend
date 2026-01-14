@@ -17,9 +17,11 @@ export function MealCard({ meal, onComplete, onView, compact = false }: MealCard
         return null;
     }
 
-    const imageUrl = meal.recipe.recipe_image.startsWith('http')
+    const imageUrl = meal.recipe.recipe_image?.startsWith('http')
         ? meal.recipe.recipe_image
-        : `${API_BASE_URL}/media/${meal.recipe.recipe_image}`;
+        : meal.recipe.recipe_image
+            ? `${API_BASE_URL}/media/${meal.recipe.recipe_image}`
+            : '/placeholder-recipe.jpg';
 
     const mealTypeColors = {
         breakfast: 'from-amber-400 to-orange-500',

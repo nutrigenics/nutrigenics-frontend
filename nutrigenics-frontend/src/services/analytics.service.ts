@@ -17,6 +17,9 @@ export interface NutrientStats {
     }[];
     calories: number[];
     total_calories: string | number;
+    nutrient_limits?: {
+        [nutrientName: string]: { daily?: number | null; weekly?: number | null; unit?: string };
+    };
 }
 
 export interface ComplianceStats {
@@ -43,8 +46,15 @@ export interface DailyHistory {
     meals: DailyMeal[];
     total_calories: number;
     total_protein: number;
-    total_carbs: number;
+    total_carbohydrates: number;
     total_fat: number;
+    total_fiber: number;
+    total_sugar: number;
+    total_sodium: number;
+    total_cholesterol: number;
+    total_saturated_fat: number;
+    total_unsaturated_fat: number;
+    total_trans_fat: number;
 }
 
 export interface AdvancedStats {

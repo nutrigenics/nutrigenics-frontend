@@ -118,17 +118,23 @@ export default function DietitianChatsPage() {
                           <h4 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
                             {patient.user.first_name} {patient.user.last_name}
                           </h4>
-                          {/* Placeholder for last message time */}
-                          {/* <span className="text-xs font-bold text-gray-400 flex items-center">
-                                                <Clock className="w-3 h-3 mr-1" />
-                                                2m ago
-                                            </span> */}
+                          {patient.last_message_time && (
+                            <span className="text-xs font-bold text-gray-400 flex items-center">
+                              {new Date(patient.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
                         </div>
-                        {/* Placeholder for last message content */}
-                        <p className="text-sm text-gray-500 truncate flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                          Tap to view conversation
-                        </p>
+                        <div className="flex justify-between items-center pr-4">
+                          <p className={`text-sm truncate flex items-center gap-1 ${patient.unread_count > 0 ? 'font-bold text-gray-900' : 'text-gray-500'}`}>
+                            {patient.unread_count > 0 && <span className="w-2 h-2 rounded-full bg-blue-500 inline-block flex-shrink-0" />}
+                            {patient.last_message || "Tap to start conversation"}
+                          </p>
+                          {patient.unread_count > 0 && (
+                            <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              {patient.unread_count}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
                     </div>

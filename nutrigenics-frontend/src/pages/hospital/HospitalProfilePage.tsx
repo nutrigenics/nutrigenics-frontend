@@ -45,7 +45,7 @@ export default function HospitalProfilePage() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const updated = await hospitalDashboardService.updateProfile(profile.id, formData);
+      const updated = await hospitalDashboardService.updateProfile(profile!.id, formData);
       setProfile(updated);
       setIsEditing(false);
       toast.success("Profile updated successfully");

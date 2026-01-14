@@ -44,13 +44,28 @@ type HeightUnit = 'ft.in' | 'cm';
 
 export default function OnboardingPage() {
     const navigate = useNavigate();
-    const { refreshUser } = useAuth();
+    const { user, refreshUser } = useAuth();
 
-    // Current step
-    const [currentStep, setCurrentStep] = useState(0);
+    // Use user role if available, otherwise default to empty
+    const initialRole = (user?.role && ['patient', 'dietitian', 'hospital'].includes(user.role))
+        ? user.role as 'patient' | 'dietitian' | 'hospital'
+        : '';
+
+    // Reference data (Patient) moved to existing declaration below
+
+    // Initial role Effect
+    useEffect(() => {
+        if (user?.role && ['patient', 'dietitian', 'hospital'].includes(user.role)) {
+            // Already set via initial state, but ensure sync if user loads late
+            if (selectedRole === '') setSelectedRole(user.role as any);
+        }
+    }, [user]);
 
     // Role Selection
-    const [selectedRole, setSelectedRole] = useState<'patient' | 'dietitian' | 'hospital' | ''>('');
+    const [selectedRole, setSelectedRole] = useState<'patient' | 'dietitian' | 'hospital' | ''>(initialRole);
+
+    // Current step - Start at 1 if role is pre-selected, else 0
+    const [currentStep, setCurrentStep] = useState(initialRole ? 1 : 0);
 
     // --- Patient Form Data ---
     const [firstName, setFirstName] = useState('');
@@ -281,6 +296,7 @@ export default function OnboardingPage() {
                     allergies: selectedAllergies.map(String),
                     cuisine_preference: selectedCuisines.map(String),
                     diet_preference: selectedDiets.map(String),
+                    consent_accepted: true
                 };
             } else if (selectedRole === 'dietitian') {
                 payload = { ...dietitianData };
@@ -292,7 +308,7 @@ export default function OnboardingPage() {
             await refreshUser();
 
             // Navigate based on role
-            if (selectedRole === 'patient') navigate('/patient/dashboard');
+            if (selectedRole === 'patient') navigate('/');
             else if (selectedRole === 'dietitian') navigate('/dietitian/dashboard');
             else if (selectedRole === 'hospital') navigate('/hospital/dashboard');
             else navigate('/');

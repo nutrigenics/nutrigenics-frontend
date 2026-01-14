@@ -30,5 +30,25 @@ export const dietitianDashboardService = {
     async updateProfile(id: number, data: any) {
         const response = await apiClient.patch(`/api/v1/dietitians/${id}/`, data);
         return response.data;
+    },
+
+    async requestPatient(data: { patient_id: string; message?: string }) {
+        const response = await apiClient.post('/api/v1/dietitians/request-patient/', data);
+        return response.data;
+    },
+
+    async getNutrientLimits(patientId: number) {
+        const response = await apiClient.get('/api/v1/nutrient-limits/', { params: { patient_id: patientId } });
+        return response.data;
+    },
+
+    async createNutrientLimit(data: any) {
+        const response = await apiClient.post('/api/v1/nutrient-limits/', data);
+        return response.data;
+    },
+
+    async updateNutrientLimit(id: number, data: any) {
+        const response = await apiClient.patch(`/api/v1/nutrient-limits/${id}/`, data);
+        return response.data;
     }
 };

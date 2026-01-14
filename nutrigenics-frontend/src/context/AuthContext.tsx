@@ -10,6 +10,7 @@ interface AuthContextType {
     isLoading: boolean;
     isOnboarded: boolean;
     login: (email: string, password: string) => Promise<boolean>;
+    guestLogin: () => Promise<boolean>;
     signup: (email: string, password: string, role: 'patient' | 'dietitian' | 'hospital') => Promise<void>;
     logout: () => Promise<void>;
     updateProfile: (data: Partial<Patient | Dietitian | Hospital>) => Promise<void>;
@@ -57,22 +58,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const userData = response.data;
 
                 // Set base user
-                setUser({
-                    id: userData.id,
-                    email: userData.email,
-                    role: userData.role || 'patient',
-                } as BaseUser);
+                // Set base user with all profile data
+                setUser(userData as BaseUser);
 
                 // Check if user is onboarded based on role
                 let onboarded = false;
                 if (userData.role === 'patient' && userData.patient) {
                     setProfile(userData.patient);
+                    // Store profile with user info for notification polling
+                    localStorage.setItem('userProfile', JSON.stringify({
+                        ...userData.patient,
+                        user: { id: userData.id, email: userData.email }
+                    }));
                     onboarded = !!userData.patient.fname; // Has completed onboarding
                 } else if (userData.role === 'dietitian' && userData.dietitian) {
                     setProfile(userData.dietitian);
+                    localStorage.setItem('userProfile', JSON.stringify({
+                        ...userData.dietitian,
+                        user: { id: userData.id, email: userData.email }
+                    }));
                     onboarded = !!userData.dietitian.fname;
                 } else if (userData.role === 'hospital' && userData.hospital) {
                     setProfile(userData.hospital);
+                    localStorage.setItem('userProfile', JSON.stringify({
+                        ...userData.hospital,
+                        user: { id: userData.id, email: userData.email }
+                    }));
                     onboarded = !!userData.hospital.name;
                 } else {
                     // Fallback: try to get role-specific profile
@@ -129,6 +140,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const guestLogin = async (): Promise<boolean> => {
+        try {
+            // authService.guestLogin stores tokens in localStorage
+            await authService.guestLogin();
+
+            // Fetch profile after successful login and return onboarding status
+            const isOnboarded = await checkAuthStatus();
+            return isOnboarded;
+        } catch (error) {
+            throw error;
+        }
+    };
+
     const signup = async (email: string, password: string, role: 'patient' | 'dietitian' | 'hospital') => {
         try {
             // Call registration endpoint
@@ -167,6 +191,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(null);
             setProfile(null);
             setIsOnboarded(false);
+            // Clean up notification-related storage
+            localStorage.removeItem('userProfile');
+            localStorage.removeItem('seen_message_ids');
         } catch (error) {
             console.error('Logout error:', error);
         }
@@ -192,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isOnboarded,
         login,
+        guestLogin,
         signup,
         logout,
         updateProfile,

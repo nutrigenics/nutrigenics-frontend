@@ -27,28 +27,28 @@ export default function DietitianChatPage() {
     scrollToBottom();
   }, [messages]);
 
+  // First, fetch patient details
   useEffect(() => {
     if (patientId) {
       fetchPatientDetails();
-      const interval = setInterval(fetchMessages, 5000);
-      fetchMessages();
-      return () => clearInterval(interval);
     }
   }, [patientId]);
 
+  // Then, fetch messages when patient is loaded (and poll)
+  useEffect(() => {
+    if (patient?.user?.id) {
+      fetchMessages();
+      // Poll every 3 seconds for near-real-time feel without WebSocket complexity
+      const interval = setInterval(fetchMessages, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [patient?.user?.id]);
+
   const fetchPatientDetails = async () => {
     try {
-      // We can reuse getPatients with search or just filter from list if no direct detail endpoint
-      // But getPatients might strip data. 
-      // Ideally: apiClient.get(\`/api/v1/patients/\${patientId}/\`) if exists.
-      // Since we don't know if that endpoint exists, let's try finding in list or similar.
-      // Actually, 'getPatients' returns list. Let's assume we can fetch list and find.
-      // Or better: Implement getPatientById in service if needed.
-      // For now, let's rely on message history to imply context or just show "Patient".
-      // Let's try to fetch all patients and find one.
       const patients = await dietitianDashboardService.getPatients();
       const target = (Array.isArray(patients) ? patients : patients.results).find((p: any) => p.id === Number(patientId));
-      setPatient(target);
+      setPatient(target || null);
     } catch (error) {
       console.error("Failed to fetch patient details", error);
     }
@@ -56,36 +56,18 @@ export default function DietitianChatPage() {
 
   const fetchMessages = async () => {
     try {
-      const data = await chatService.getMessages();
-      // Filter messages relevant to this conversation (between me and patient's user ID)
-      // Patient object has 'user' object with 'id'.
-      // We need patient's USER ID, not Patient Profile ID.
-      // Wait, message sender/receiver are User IDs. 
-      // 'patient' object from API usually looks like: { id: 1, user: { id: 10, ... } }
-      // So we need to match message.sender or message.receiver with patient.user.id
+      // Use server-side filtering with patient.user.id
+      if (patient?.user?.id) {
+        const data = await chatService.getMessages(patient.user.id);
+        const allMessages = Array.isArray(data) ? data : data.results || [];
 
-      const allMessages = Array.isArray(data) ? data : data.results || [];
-
-      // If we haven't fetched patient details yet, we might not know the user ID.
-      // However, we can filter by the fact that one side is the current user.
-      // But we need to distinguish between different patients.
-      // We need patient.user.id
-      if (patient && patient.user) {
-        const patientUserId = patient.user.id;
-        const filtered = allMessages.filter((msg: Message) =>
-          (msg.sender === patientUserId || msg.receiver === patientUserId)
-        );
-
-        // Sort by timestamp
-        filtered.sort((a: Message, b: Message) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-        setMessages(filtered);
+        // Simple de-duplication check could act here if needed
+        setMessages(allMessages);
 
         // Mark received messages as read
-        const unread = filtered.filter((m: Message) => !m.is_read && m.sender === patientUserId);
+        const unread = allMessages.filter((m: Message) => !m.is_read && m.sender === patient.user.id);
         unread.forEach((m: Message) => chatService.markRead(m.id));
       }
-
     } catch (error) {
       console.error('Failed to fetch messages:', error);
     } finally {
@@ -101,12 +83,32 @@ export default function DietitianChatPage() {
     e.preventDefault();
     if (!newMessage.trim() || !patient?.user?.id) return;
 
+    const tempContent = newMessage;
+    setNewMessage(''); // Clear input immediately
+
+    // Optimistic UI Update: Create a fake message object
+    const optimisticMessage: Message = {
+      id: Date.now(), // Temporary ID
+      sender: currentUserId || 0,
+      sender_email: user?.email || '',
+      receiver: patient.user.id,
+      receiver_email: patient.user.email,
+      content: tempContent,
+      timestamp: new Date().toISOString(),
+      is_read: false
+    };
+
+    setMessages(prev => [...prev, optimisticMessage]);
+
     try {
-      await chatService.sendMessage(newMessage, patient.user.id);
-      setNewMessage('');
+      await chatService.sendMessage(tempContent, patient.user.id);
+      // Wait for next poll to sync real ID, or fetch immediately
       fetchMessages();
     } catch (error) {
       console.error('Failed to send message:', error);
+      // Rollback on error (optional, or show alert)
+      alert("Failed to send message. Please retry.");
+      fetchMessages(); // Re-sync state
     }
   };
 

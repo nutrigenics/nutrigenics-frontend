@@ -20,11 +20,12 @@ export const dietitianService = {
     },
 
     async getPendingRequests() {
-        // We can infer this from getMyDietitian pending_requests count, 
-        // or fetch from /dietitian-requests/ if needed.
-        // For now the dashboard status uses my_dietitian.
-        // But if we want to list them:
         const response = await apiClient.get('/api/v1/dietitian-requests/');
+        return response.data;
+    },
+
+    async respondRequest(requestId: number, status: 'accepted' | 'rejected') {
+        const response = await apiClient.post(`/api/v1/dietitian-requests/${requestId}/respond/`, { status });
         return response.data;
     }
 };

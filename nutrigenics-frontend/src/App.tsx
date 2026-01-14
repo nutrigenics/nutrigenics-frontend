@@ -23,6 +23,9 @@ const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
 const VerifyEmailPage = lazy(() => import('@/pages/auth/VerifyEmailPage'));
 const OnboardingPage = lazy(() => import('@/pages/auth/OnboardingPage'));
 
+// Home Page (role-based redirect)
+const HomePage = lazy(() => import('@/pages/HomePage'));
+
 // Patient Pages
 const DashboardPage = lazy(() => import('@/pages/patient/DashboardPage'));
 const MealPlanPage = lazy(() => import('@/pages/patient/MealPlanPage'));
@@ -46,6 +49,8 @@ const DietitianChatsPage = lazy(() => import('@/pages/dietitian/DietitianChatsPa
 const DietitianChatPage = lazy(() => import('@/pages/dietitian/DietitianChatPage'));
 const DietitianProfilePage = lazy(() => import('@/pages/dietitian/DietitianProfilePage'));
 const DietitianOnboardingPage = lazy(() => import('@/pages/dietitian/DietitianOnboardingPage'));
+const DietitianPatientAnalyticsPage = lazy(() => import('@/pages/dietitian/DietitianPatientAnalyticsPage'));
+const DietitianMealPlansPage = lazy(() => import('@/pages/dietitian/DietitianMealPlansPage'));
 
 // Hospital Pages
 const HospitalDashboardPage = lazy(() => import('@/pages/hospital/HospitalDashboardPage'));
@@ -89,7 +94,8 @@ function App() {
                 {/* Protected Routes (Patient) */}
                 <Route element={<ProtectedRoute />}>
                   <Route element={<MainLayout />}>
-                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/plan" element={<MealPlanPage />} />
                     <Route path="/recipes" element={<RecipesPage />} />
                     <Route path="/recipes/results" element={<RecipeResultsPage />} />
@@ -111,6 +117,9 @@ function App() {
                   <Route element={<MainLayout />}>
                     <Route path="/dietitian/dashboard" element={<DietitianDashboardPage />} />
                     <Route path="/dietitian/patients" element={<DietitianPatientsPage />} />
+                    <Route path="/dietitian/patients/:patientId/analytics" element={<DietitianPatientAnalyticsPage />} />
+                    <Route path="/dietitian/patients/:patientId/chat" element={<DietitianChatPage />} />
+                    <Route path="/dietitian/patients/:patientId/plan" element={<DietitianMealPlansPage />} />
                     <Route path="/dietitian/chats" element={<DietitianChatsPage />} />
                     <Route path="/dietitian/chats/:patientId" element={<DietitianChatPage />} />
                     <Route path="/dietitian/profile" element={<DietitianProfilePage />} />

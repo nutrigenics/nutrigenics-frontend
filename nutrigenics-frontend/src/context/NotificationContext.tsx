@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { notificationService, type Notification as ApiNotification } from '@/services/notification.service';
 
 export interface Notification {
     id: string;
@@ -6,7 +7,7 @@ export interface Notification {
     description: string;
     time: string;
     timestamp: number;
-    type: 'message' | 'reminder' | 'system';
+    type: string;
     read: boolean;
 }
 
@@ -15,22 +16,17 @@ interface NotificationContextType {
     unreadCount: number;
     markAsRead: (id: string) => void;
     markAllAsRead: () => void;
-    addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read' | 'time'>) => void;
+    clearAll: () => void;
+    refetch: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
-    const [notifications, setNotifications] = useState<Notification[]>(() => {
-        const saved = localStorage.getItem('notifications');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const seenIds = useRef<Set<number>>(new Set());
 
     const unreadCount = notifications.filter(n => !n.read).length;
-
-    useEffect(() => {
-        localStorage.setItem('notifications', JSON.stringify(notifications));
-    }, [notifications]);
 
     // Request Notification Permission on mount
     useEffect(() => {
@@ -39,89 +35,85 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         }
     }, []);
 
-    // Reminder Logic
+    // Poll notifications from API
+    const fetchNotifications = async () => {
+        const token = localStorage.getItem('access_token');
+        if (!token) return;
+
+        try {
+            const data = await notificationService.getNotifications();
+
+            // Check for new notifications to trigger browser notification
+            data.forEach((notif: ApiNotification) => {
+                if (!seenIds.current.has(notif.id) && !notif.is_read) {
+                    seenIds.current.add(notif.id);
+
+                    // Browser Notification
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        new window.Notification(notif.title, {
+                            body: notif.message,
+                            icon: '/favicon.ico'
+                        });
+                    }
+                }
+            });
+
+            // Map to frontend format
+            const formatted: Notification[] = data.map((n: ApiNotification) => ({
+                id: n.id.toString(),
+                title: n.title,
+                description: n.message,
+                time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                timestamp: new Date(n.created_at).getTime(),
+                type: n.notification_type,
+                read: n.is_read
+            }));
+
+            setNotifications(formatted);
+        } catch (error) {
+            // Silently fail if not logged in or API error
+        }
+    };
+
     useEffect(() => {
-        const checkReminders = () => {
-            const now = new Date();
-            const hour = now.getHours();
-            const todayStr = now.toDateString();
-
-            // Get last check data from localStorage
-            const remindersSent = JSON.parse(localStorage.getItem('reminders_log') || '{}');
-
-            if (remindersSent.date !== todayStr) {
-                remindersSent.date = todayStr;
-                remindersSent.breakfast = false;
-                remindersSent.lunch = false;
-                remindersSent.dinner = false;
-            }
-
-            // Breakfast: 7 AM - 10 AM
-            if (hour >= 7 && hour < 10 && !remindersSent.breakfast) {
-                triggerReminder("Good Morning! ☀️", "Time for breakfast! Don't forget to log your meal.");
-                remindersSent.breakfast = true;
-            }
-
-            // Lunch: 12 PM - 2 PM (14:00)
-            if (hour >= 12 && hour < 14 && !remindersSent.lunch) {
-                triggerReminder("It's Lunchtime! 🥗", "Remember to have a healthy lunch and track it.");
-                remindersSent.lunch = true;
-            }
-
-            // Dinner: 7 PM (19:00) - 9 PM (21:00)
-            if (hour >= 19 && hour < 21 && !remindersSent.dinner) {
-                triggerReminder("Dinner Time 🌙", "Time to wind down with a nutritious dinner.");
-                remindersSent.dinner = true;
-            }
-
-            localStorage.setItem('reminders_log', JSON.stringify(remindersSent));
-        };
-
-        const triggerReminder = (title: string, msg: string) => {
-            const newNotif: Notification = {
-                id: Date.now().toString(),
-                title: title,
-                description: msg,
-                time: 'Just now',
-                timestamp: Date.now(),
-                type: 'reminder',
-                read: false
-            };
-            setNotifications(prev => [newNotif, ...prev]);
-
-            // Browser Notification
-            if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification(title, { body: msg });
-            }
-        };
-
-        const interval = setInterval(checkReminders, 60000); // Check every minute
-        checkReminders(); // Initial check
-
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
         return () => clearInterval(interval);
     }, []);
 
-    const markAsRead = (id: string) => {
-        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    const markAsRead = async (id: string) => {
+        try {
+            await notificationService.markRead(parseInt(id));
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+        } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+        }
     };
 
-    const markAllAsRead = () => {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const markAllAsRead = async () => {
+        try {
+            await notificationService.markAllRead();
+            setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        } catch (error) {
+            console.error('Failed to mark all as read:', error);
+        }
     };
 
-    const addNotification = (n: Omit<Notification, 'id' | 'timestamp' | 'read' | 'time'>) => {
-        const newNotif: Notification = {
-            ...n,
-            id: Date.now().toString(),
-            time: 'Just now',
-            timestamp: Date.now(),
-            read: false
-        };
-        setNotifications(prev => [newNotif, ...prev]);
+    const clearAll = async () => {
+        try {
+            await notificationService.clearAll();
+            setNotifications([]);
+        } catch (error) {
+            console.error('Failed to clear notifications:', error);
+        }
+    };
+
+    const refetch = () => {
+        fetchNotifications();
     };
 
     return (
-        <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, addNotification }}>
+        <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, clearAll, refetch }}>
             {children}
         </NotificationContext.Provider>
     );

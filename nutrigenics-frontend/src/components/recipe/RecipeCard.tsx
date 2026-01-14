@@ -38,7 +38,7 @@ export function RecipeCard({ recipe, className, variant = 'default', onClick, ac
         const newState = !isBookmarked;
         setIsBookmarked(newState);
         try {
-            await recipeService.bookmarkRecipe(recipe.pk);
+            await recipeService.bookmarkRecipe(recipe.pk || recipe.id);
             toast.success(newState ? 'Recipe saved!' : 'Recipe removed from saved');
         } catch (error) {
             setIsBookmarked(!newState);
@@ -52,7 +52,7 @@ export function RecipeCard({ recipe, className, variant = 'default', onClick, ac
         const newState = !isLiked;
         setIsLiked(newState);
         try {
-            await recipeService.likeRecipe(recipe.pk);
+            await recipeService.likeRecipe(recipe.pk || recipe.id);
         } catch (error) {
             setIsLiked(!newState);
             toast.error('Failed to update like');
@@ -92,9 +92,6 @@ export function RecipeCard({ recipe, className, variant = 'default', onClick, ac
         const getNutrient = (names: string[]) => nutrients.find(n => names.some(name => (n.nutrient?.name === name || (n as any).nutrient_name === name)));
 
         const calories = getNutrient(['Calories', 'Energy']);
-        const protein = getNutrient(['Protein']);
-        const carbs = getNutrient(['Carbohydrates', 'Carbs']);
-        const fat = getNutrient(['Fat', 'Total Fat']);
 
         return (
             <div
