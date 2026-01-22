@@ -289,4 +289,16 @@ export interface HospitalDashboardStats {
         dietitian_email: string;
         created_at: string;
     }[];
+    // New: patients data
+    total_patients: number;
+    patients: {
+        id: number;
+        patient_id: string;
+        name: string;
+        email: string | null;
+        dietitian_id: number | null;
+        dietitian_name: string;
+        gender: string | null;
+        age: number | null;
+    }[];
 }

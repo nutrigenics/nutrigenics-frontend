@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Menu, Home, ChevronRight, Sun, Moon, Bell, Check, Trash2 } from 'lucide-react';
+import { Search, Menu, Home, ChevronRight, Sun, Moon, Bell, Check, Trash2, MessageCircle, UserPlus, AlertTriangle, Settings2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -79,7 +79,8 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
             'profile': 'My Profile',
             'search': 'Search',
             'patients': 'Patients',
-            'chats': 'Chats'
+            'chats': 'Chats',
+            'dietitians': 'Dietitians'
         };
         return labels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1);
     };
@@ -100,12 +101,24 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     // Get notification icon color based on type
     const getNotifColor = (type: string) => {
         switch (type) {
-            case 'message': return 'bg-blue-100 text-blue-600';
-            case 'reminder': return 'bg-amber-100 text-amber-600';
-            case 'dietitian_request': return 'bg-green-100 text-green-600';
-            case 'connection': return 'bg-purple-100 text-purple-600';
-            case 'limit_change': return 'bg-teal-100 text-teal-600';
-            default: return 'bg-gray-100 text-gray-600';
+            case 'message': return 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+            case 'request': return 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
+            case 'request_response': return 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400';
+            case 'limit_exceeded': return 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400';
+            case 'limit_change': return 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400';
+            default: return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+        }
+    };
+
+    // Get notification icon based on type
+    const getNotifIcon = (type: string) => {
+        switch (type) {
+            case 'message': return <MessageCircle className="w-4 h-4" />;
+            case 'request': return <UserPlus className="w-4 h-4" />;
+            case 'request_response': return <UserPlus className="w-4 h-4" />;
+            case 'limit_exceeded': return <AlertTriangle className="w-4 h-4" />;
+            case 'limit_change': return <Settings2 className="w-4 h-4" />;
+            default: return <Bell className="w-4 h-4" />;
         }
     };
 
@@ -135,6 +148,9 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                                 </BreadcrumbItem>
 
                                 {pathSegments.map((segment, index) => {
+                                    // Skip redundant role labels in breadcrumbs
+                                    if (['dietitian', 'hospital'].includes(segment)) return null;
+
                                     const path = `/${pathSegments.slice(0, index + 1).join('/')}`;
                                     const isLast = index === pathSegments.length - 1;
                                     const label = getLabel(segment);
@@ -204,60 +220,67 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                                 )}
                             </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-96 p-0" align="end">
+                        <PopoverContent className="w-96 p-0 rounded-2xl shadow-xl border-border/50" align="end">
                             {/* Header */}
-                            <div className="flex items-center justify-between p-4 border-b">
-                                <h3 className="font-bold text-lg">Notifications</h3>
+                            <div className="flex items-center justify-between p-4 border-b border-border/50 bg-muted/30">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                        <Bell className="w-4 h-4 text-primary" />
+                                    </div>
+                                    <h3 className="font-bold text-base">Notifications</h3>
+                                </div>
                                 {notifications.length > 0 && (
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-1">
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 text-xs"
+                                            className="h-7 px-2 text-xs rounded-lg hover:bg-primary/10"
                                             onClick={() => markAllAsRead()}
                                         >
-                                            <Check className="w-3 h-3 mr-1" /> Mark all read
+                                            <Check className="w-3 h-3 mr-1" /> Read all
                                         </Button>
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 text-xs text-destructive hover:text-destructive"
+                                            className="h-7 px-2 text-xs rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10"
                                             onClick={() => clearAll()}
                                         >
-                                            <Trash2 className="w-3 h-3 mr-1" /> Clear all
+                                            <Trash2 className="w-3 h-3" />
                                         </Button>
                                     </div>
                                 )}
                             </div>
 
                             {/* Notification List */}
-                            <div className="max-h-96 overflow-y-auto">
+                            <div className="max-h-80 overflow-y-auto">
                                 {notifications.length === 0 ? (
-                                    <div className="p-8 text-center text-muted-foreground">
-                                        <Bell className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                                        <p className="font-medium">No notifications</p>
-                                        <p className="text-sm">You're all caught up!</p>
+                                    <div className="p-8 text-center">
+                                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                                            <Bell className="w-8 h-8 text-primary/40" />
+                                        </div>
+                                        <p className="font-semibold text-foreground">All caught up!</p>
+                                        <p className="text-sm text-muted-foreground mt-1">No new notifications</p>
                                     </div>
                                 ) : (
                                     notifications.slice(0, 10).map(notif => (
                                         <div
                                             key={notif.id}
-                                            className={`p-4 border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer ${!notif.read ? 'bg-primary/5' : ''}`}
+                                            className={`p-3 border-b border-border/30 last:border-0 hover:bg-muted/50 transition-all duration-200 cursor-pointer group ${!notif.read ? 'bg-primary/5' : ''}`}
                                             onClick={() => markAsRead(notif.id)}
                                         >
                                             <div className="flex gap-3">
-                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${getNotifColor(notif.type)}`}>
-                                                    <Bell className="w-4 h-4" />
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 ${getNotifColor(notif.type)}`}>
+                                                    {getNotifIcon(notif.type)}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-start justify-between gap-2">
-                                                        <p className="font-medium text-sm truncate">{notif.title}</p>
+                                                        <p className={`text-sm ${!notif.read ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'}`}>{notif.title}</p>
                                                         {!notif.read && (
-                                                            <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />
+                                                            <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5 animate-pulse" />
                                                         )}
                                                     </div>
-                                                    <p className="text-sm text-muted-foreground line-clamp-2">{notif.description}</p>
-                                                    <p className="text-xs text-muted-foreground mt-1">{formatTime(notif.timestamp)}</p>
+                                                    <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{notif.description}</p>
+                                                    <p className="text-[10px] text-muted-foreground/70 mt-1 font-medium">{formatTime(notif.timestamp)}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -296,6 +319,6 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                     </Link>
                 </div>
             </div>
-        </header>
+        </header >
     );
 }

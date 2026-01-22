@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { NotificationProvider } from '@/context/NotificationContext';
@@ -54,6 +54,7 @@ const DietitianMealPlansPage = lazy(() => import('@/pages/dietitian/DietitianMea
 
 // Hospital Pages
 const HospitalDashboardPage = lazy(() => import('@/pages/hospital/HospitalDashboardPage'));
+const HospitalDietitiansPage = lazy(() => import('@/pages/hospital/HospitalDietitiansPage'));
 const HospitalRequestsPage = lazy(() => import('@/pages/hospital/HospitalRequestsPage'));
 const HospitalProfilePage = lazy(() => import('@/pages/hospital/HospitalProfilePage'));
 const HospitalOnboardingPage = lazy(() => import('@/pages/hospital/HospitalOnboardingPage'));
@@ -121,7 +122,7 @@ function App() {
                     <Route path="/dietitian/patients/:patientId/chat" element={<DietitianChatPage />} />
                     <Route path="/dietitian/patients/:patientId/plan" element={<DietitianMealPlansPage />} />
                     <Route path="/dietitian/chats" element={<DietitianChatsPage />} />
-                    <Route path="/dietitian/chats/:patientId" element={<DietitianChatPage />} />
+                    <Route path="/dietitian/chats/:patientId" element={<DietitianChatsPage />} />
                     <Route path="/dietitian/profile" element={<DietitianProfilePage />} />
                   </Route>
                 </Route>
@@ -129,7 +130,9 @@ function App() {
                 {/* Protected Routes (Hospital) */}
                 <Route element={<ProtectedRoute role="hospital" />}>
                   <Route element={<MainLayout />}>
+                    <Route path="/hospital" element={<Navigate to="/hospital/dashboard" replace />} />
                     <Route path="/hospital/dashboard" element={<HospitalDashboardPage />} />
+                    <Route path="/hospital/dietitians" element={<HospitalDietitiansPage />} />
                     <Route path="/hospital/requests" element={<HospitalRequestsPage />} />
                     <Route path="/hospital/profile" element={<HospitalProfilePage />} />
                   </Route>

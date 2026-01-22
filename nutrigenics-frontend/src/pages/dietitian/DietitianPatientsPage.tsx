@@ -253,7 +253,7 @@ export default function DietitianPatientsPage() {
                         <TrendingUp className="w-4 h-4 mr-2" /> Analytics
                       </Button>
                     </Link>
-                    <Link to={`/dietitian/patients/${patient.id}/chat`}>
+                    <Link to={`/dietitian/chats/${patient.id}`}>
                       <Button variant="outline" className="h-12 px-5 rounded-xl border-gray-200 hover:bg-gray-50 font-semibold text-gray-700">
                         <MessageSquare className="w-4 h-4 mr-2" /> Chat
                       </Button>

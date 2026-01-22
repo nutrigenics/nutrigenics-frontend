@@ -17,6 +17,7 @@ import {
     Settings,
     Building2,
     FileText,
+    Users,
 } from 'lucide-react';
 import {
     Tooltip,
@@ -53,6 +54,7 @@ const dietitianNavItems = [
 
 const hospitalNavItems = [
     { name: 'Dashboard', href: '/hospital/dashboard', icon: LayoutDashboard },
+    { name: 'Dietitians', href: '/hospital/dietitians', icon: Users },
     { name: 'Requests', href: '/hospital/requests', icon: FileText },
     { name: 'Profile', href: '/hospital/profile', icon: Building2 },
 ];
