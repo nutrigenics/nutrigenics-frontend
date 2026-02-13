@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { NotificationProvider } from '@/context/NotificationContext';
@@ -37,7 +37,6 @@ const AnalyticsPage = lazy(() => import('@/pages/patient/AnalyticsPage'));
 const AIChatPage = lazy(() => import('@/pages/patient/AIChatPage'));
 const BookmarksPage = lazy(() => import('@/pages/patient/BookmarksPage'));
 const MyDietitianPage = lazy(() => import('@/pages/patient/MyDietitianPage'));
-const MyDietitianChatPage = lazy(() => import('@/pages/patient/MyDietitianChatPage'));
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const ProfilePage = lazy(() => import('@/pages/patient/ProfilePage'));
@@ -48,15 +47,17 @@ const DietitianPatientsPage = lazy(() => import('@/pages/dietitian/DietitianPati
 const DietitianChatsPage = lazy(() => import('@/pages/dietitian/DietitianChatsPage'));
 const DietitianChatPage = lazy(() => import('@/pages/dietitian/DietitianChatPage'));
 const DietitianProfilePage = lazy(() => import('@/pages/dietitian/DietitianProfilePage'));
-const DietitianOnboardingPage = lazy(() => import('@/pages/dietitian/DietitianOnboardingPage'));
-const DietitianPatientAnalyticsPage = lazy(() => import('@/pages/dietitian/DietitianPatientAnalyticsPage'));
-const DietitianMealPlansPage = lazy(() => import('@/pages/dietitian/DietitianMealPlansPage'));
+const DietitianPatientDetailsPage = lazy(() => import('@/pages/dietitian/DietitianPatientDetailsPage'));
 
 // Hospital Pages
 const HospitalDashboardPage = lazy(() => import('@/pages/hospital/HospitalDashboardPage'));
 const HospitalRequestsPage = lazy(() => import('@/pages/hospital/HospitalRequestsPage'));
 const HospitalProfilePage = lazy(() => import('@/pages/hospital/HospitalProfilePage'));
-const HospitalOnboardingPage = lazy(() => import('@/pages/hospital/HospitalOnboardingPage'));
+const HospitalDietitiansPage = lazy(() => import('@/pages/hospital/HospitalDietitiansPage'));
+
+// Documentation Pages
+const DocsLayout = lazy(() => import('@/layouts/DocsLayout'));
+const AnalyticsDocsPage = lazy(() => import('@/pages/docs/AnalyticsDocsPage'));
 
 // Other
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
@@ -83,18 +84,23 @@ function App() {
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/onboarding" element={<OnboardingPage />} />
 
-                <Route path="/dietitian/onboarding" element={<DietitianOnboardingPage />} />
-                <Route path="/hospital/onboarding" element={<HospitalOnboardingPage />} />
+                <Route path="/dietitian/onboarding" element={<Navigate to="/onboarding" replace />} />
+                <Route path="/hospital/onboarding" element={<Navigate to="/onboarding" replace />} />
 
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/contact" element={<ContactPage />} />
+                <Route path="/help" element={<Navigate to="/contact" replace />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
 
-                {/* Protected Routes (Patient) */}
+                {/* Protected Route (Role Redirect Entry) */}
                 <Route element={<ProtectedRoute />}>
+                  <Route path="/" element={<HomePage />} />
+                </Route>
+
+                {/* Protected Routes (Patient) */}
+                <Route element={<ProtectedRoute role="patient" />}>
                   <Route element={<MainLayout />}>
-                    <Route path="/" element={<HomePage />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/plan" element={<MealPlanPage />} />
                     <Route path="/recipes" element={<RecipesPage />} />
@@ -102,13 +108,14 @@ function App() {
                     <Route path="/recipes/:id" element={<RecipeDetailPage />} />
                     <Route path="/search" element={<SearchRecipesPage />} />
                     <Route path="/analytics" element={<AnalyticsPage />} />
-                    <Route path="/chat" element={<AIChatPage />} />
                     <Route path="/bookmarks" element={<BookmarksPage />} />
                     <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/my-dietitian" element={<MyDietitianPage />} />
-                    <Route path="/my-dietitian/chat" element={<MyDietitianChatPage />} />
+                  </Route>
+                  <Route element={<MainLayout fullHeight />}>
+                    <Route path="/chat" element={<AIChatPage />} />
                   </Route>
                 </Route>
 
@@ -117,12 +124,13 @@ function App() {
                   <Route element={<MainLayout />}>
                     <Route path="/dietitian/dashboard" element={<DietitianDashboardPage />} />
                     <Route path="/dietitian/patients" element={<DietitianPatientsPage />} />
-                    <Route path="/dietitian/patients/:patientId/analytics" element={<DietitianPatientAnalyticsPage />} />
-                    <Route path="/dietitian/patients/:patientId/chat" element={<DietitianChatPage />} />
-                    <Route path="/dietitian/patients/:patientId/plan" element={<DietitianMealPlansPage />} />
-                    <Route path="/dietitian/chats" element={<DietitianChatsPage />} />
+                    <Route path="/dietitian/patients/:patientId" element={<DietitianPatientDetailsPage />} />
                     <Route path="/dietitian/chats/:patientId" element={<DietitianChatPage />} />
                     <Route path="/dietitian/profile" element={<DietitianProfilePage />} />
+                  </Route>
+                  {/* Full height layout for chats page */}
+                  <Route element={<MainLayout fullHeight />}>
+                    <Route path="/dietitian/chats" element={<DietitianChatsPage />} />
                   </Route>
                 </Route>
 
@@ -130,9 +138,16 @@ function App() {
                 <Route element={<ProtectedRoute role="hospital" />}>
                   <Route element={<MainLayout />}>
                     <Route path="/hospital/dashboard" element={<HospitalDashboardPage />} />
+                    <Route path="/hospital/dietitians" element={<HospitalDietitiansPage />} />
                     <Route path="/hospital/requests" element={<HospitalRequestsPage />} />
                     <Route path="/hospital/profile" element={<HospitalProfilePage />} />
                   </Route>
+                </Route>
+
+                {/* Documentation Routes (Public or Protected depending on requirement, putting Public for now) */}
+                <Route path="/docs" element={<DocsLayout />}>
+                  <Route index element={<div />} /> {/* Redirect logic handled in layout or via Navigate */}
+                  <Route path="analytics" element={<AnalyticsDocsPage />} />
                 </Route>
 
                 <Route path="*" element={<NotFoundPage />} />
@@ -147,4 +162,3 @@ function App() {
 }
 
 export default App;
-

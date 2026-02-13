@@ -12,7 +12,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-11 items-center justify-center rounded-xl bg-muted p-1.5 text-muted-foreground",
+      "inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white border border-slate-200 p-1.5 text-muted-foreground shadow-sm",
       className
     )}
     {...props}
@@ -27,12 +27,17 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+      "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 disabled:pointer-events-none disabled:opacity-50",
+      // Inactive state: show hover effect
+      "data-[state=inactive]:hover:bg-slate-100 data-[state=inactive]:hover:text-slate-900",
+      // Active state: gradient + glow
+      "data-[state=active]:bg-gradient-to-b data-[state=active]:from-emerald-500 data-[state=active]:to-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] data-[state=active]:border data-[state=active]:border-primary/20 data-[state=active]:ring-2 data-[state=active]:ring-primary data-[state=active]:ring-offset-2",
       className
     )}
     {...props}
   />
 ))
+
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName
 
 const TabsContent = React.forwardRef<

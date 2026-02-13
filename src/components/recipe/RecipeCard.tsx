@@ -103,6 +103,15 @@ export function RecipeCard({ recipe, className, variant = 'default', onClick, ac
         return (
             <div
                 onClick={onClick}
+                role={onClick ? "button" : undefined}
+                tabIndex={onClick ? 0 : undefined}
+                onKeyDown={(event) => {
+                    if (!onClick) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onClick();
+                    }
+                }}
                 className={cn(
                     "flex items-center gap-3 p-3 rounded-lg border border-border bg-card",
                     "hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group",
@@ -189,9 +198,9 @@ export function RecipeCard({ recipe, className, variant = 'default', onClick, ac
                         if (!data) return null;
 
                         return (
-                            <Badge key={index} variant="secondary" className="font-normal px-2.5 py-1">
+                            <Badge key={index} variant="secondary" className="font-normal px-2.5 py-1 ">
                                 <span className="font-bold mr-1">{data.value.toLocaleString()}{data.unit}</span>
-                                <span className="opacity-70 text-[10px] uppercase font-bold">{data.label}</span>
+                                <span className="opacity-70 text-xs uppercase font-bold">{data.label}</span>
                             </Badge>
                         );
                     })}
@@ -231,7 +240,7 @@ export function RecipeCard({ recipe, className, variant = 'default', onClick, ac
                                 'w-10 h-10 rounded-lg transition-all duration-200',
                                 isBookmarked
                                     ? 'bg-emerald-50 text-emerald-600 border-emerald-200  '
-                                    : 'hover:border-emerald-400 hover:text-emerald-600 :border-emerald-800'
+                                    : 'hover:border-emerald-400 hover:text-emerald-600'
                             )}
                             aria-label="Bookmark recipe"
                         >
@@ -251,7 +260,7 @@ export function RecipeCard({ recipe, className, variant = 'default', onClick, ac
                                 'w-10 h-10 rounded-lg transition-all duration-200',
                                 isLiked
                                     ? 'bg-rose-50 text-rose-600 border-rose-200  '
-                                    : 'hover:border-rose-400 hover:text-rose-600 :border-rose-800'
+                                    : 'hover:border-rose-400 hover:text-rose-600'
                             )}
                             aria-label="Like recipe"
                         >

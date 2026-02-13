@@ -2,20 +2,30 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronRight } from 'lucide-react';
+import {
+    ChevronRight,
+    Pizza,
+    Flame,
+    Soup,
+    Salad,
+    Wheat,
+    Sandwich,
+    type LucideIcon
+} from 'lucide-react';
 
 interface Cuisine {
     name: string;
-    icon: string;
+    icon: LucideIcon;
+    color: string;
 }
 
 const POPULAR_CUISINES: Cuisine[] = [
-    { name: 'Italian', icon: '🍝' },
-    { name: 'Mexican', icon: '🌮' },
-    { name: 'Asian', icon: '🥢' },
-    { name: 'Mediterranean', icon: '🥙' },
-    { name: 'Indian', icon: '🍛' },
-    { name: 'American', icon: '🍔' }
+    { name: 'Italian', icon: Pizza, color: 'text-orange-500' },
+    { name: 'Mexican', icon: Flame, color: 'text-red-500' },
+    { name: 'Asian', icon: Soup, color: 'text-amber-500' },
+    { name: 'Mediterranean', icon: Salad, color: 'text-emerald-500' },
+    { name: 'Indian', icon: Wheat, color: 'text-yellow-500' },
+    { name: 'American', icon: Sandwich, color: 'text-blue-500' }
 ];
 
 export function PopularCuisines() {
@@ -34,30 +44,33 @@ export function PopularCuisines() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                {POPULAR_CUISINES.map((cuisine, index) => (
-                    <Link
-                        key={cuisine.name}
-                        to={`/recipes?cuisine=${cuisine.name.toLowerCase()}`}
-                        className="block h-full"
-                    >
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: index * 0.05 }}
-                            whileHover={{ scale: 1.03 }}
-                            className="h-full"
+                {POPULAR_CUISINES.map((cuisine, index) => {
+                    const Icon = cuisine.icon;
+                    return (
+                        <Link
+                            key={cuisine.name}
+                            to={`/recipes/results?cuisine=${cuisine.name.toLowerCase()}`}
+                            className="block h-full"
                         >
-                            <Card className="h-full p-6 flex flex-col items-center justify-center text-center gap-3 border-border shadow-sm bg-muted/30 hover:bg-accent hover:border-primary/30 transition-all cursor-pointer rounded-3xl">
-                                <div className="text-4xl filter drop-shadow-sm">
-                                    {cuisine.icon}
-                                </div>
-                                <h3 className="font-semibold text-foreground text-sm">
-                                    {cuisine.name}
-                                </h3>
-                            </Card>
-                        </motion.div>
-                    </Link>
-                ))}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: index * 0.05 }}
+                                whileHover={{ scale: 1.03 }}
+                                className="h-full"
+                            >
+                                <Card className="h-full py-8 px-4 flex flex-col items-center justify-center text-center gap-4 border-slate-100 shadow-soft bg-white hover:shadow-soft-lg hover:border-emerald-100 transition-all cursor-pointer rounded-2xl group">
+                                    <div className={`p-4 rounded-full bg-slate-50 group-hover:bg-emerald-50 transition-colors duration-300 ${cuisine.color}`}>
+                                        <Icon className="w-8 h-8 stroke-[1.5]" />
+                                    </div>
+                                    <h3 className="font-semibold text-slate-700 group-hover:text-emerald-700 transition-colors">
+                                        {cuisine.name}
+                                    </h3>
+                                </Card>
+                            </motion.div>
+                        </Link>
+                    );
+                })}
             </div>
         </div>
     );

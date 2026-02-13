@@ -405,26 +405,42 @@ export default function MealPlanPage() {
                                     </div>
                                   )}
                                 </div>
-                                <Link
-                                  to={item.recipe_id ? `/recipes/${item.recipe_id}` : '#'}
-                                  className={`flex-1 min-w-0 ${!item.recipe_id && 'pointer-events-none'}`}
-                                >
-                                  <h4 className="font-bold text-foreground text-sm truncate hover:text-primary transition-colors">{item.name || item.custom_name}</h4>
-                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
-                                    <span className="font-medium text-foreground">{item.calories?.toFixed(0) || 0} kcal</span>
-                                    <span className="w-1 h-1 rounded-full bg-border" />
-                                    <span>{item.protein?.toFixed(1) || 0}g Protein</span>
-                                    <span className="w-1 h-1 rounded-full bg-border" />
-                                    <span>{item.carbs?.toFixed(1) || 0}g Carbohydrates</span>
-                                    <span className="w-1 h-1 rounded-full bg-border" />
-                                    <span>{item.fat?.toFixed(1) || 0}g Fat</span>
+                                {item.recipe_id ? (
+                                  <Link
+                                    to={`/recipes/${item.recipe_id}`}
+                                    className="flex-1 min-w-0"
+                                  >
+                                    <h4 className="font-bold text-foreground text-sm truncate hover:text-primary transition-colors">{item.name || item.custom_name}</h4>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
+                                      <span className="font-medium text-foreground">{item.calories?.toFixed(0) || 0} kcal</span>
+                                      <span className="w-1 h-1 rounded-full bg-border" />
+                                      <span>{item.protein?.toFixed(1) || 0}g Protein</span>
+                                      <span className="w-1 h-1 rounded-full bg-border" />
+                                      <span>{item.carbs?.toFixed(1) || 0}g Carbohydrates</span>
+                                      <span className="w-1 h-1 rounded-full bg-border" />
+                                      <span>{item.fat?.toFixed(1) || 0}g Fat</span>
+                                    </div>
+                                  </Link>
+                                ) : (
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-foreground text-sm truncate">{item.name || item.custom_name}</h4>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
+                                      <span className="font-medium text-foreground">{item.calories?.toFixed(0) || 0} kcal</span>
+                                      <span className="w-1 h-1 rounded-full bg-border" />
+                                      <span>{item.protein?.toFixed(1) || 0}g Protein</span>
+                                      <span className="w-1 h-1 rounded-full bg-border" />
+                                      <span>{item.carbs?.toFixed(1) || 0}g Carbohydrates</span>
+                                      <span className="w-1 h-1 rounded-full bg-border" />
+                                      <span>{item.fat?.toFixed(1) || 0}g Fat</span>
+                                    </div>
                                   </div>
-                                </Link>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                                   onClick={() => removePlan(item.id)}
+                                  aria-label="Remove meal from plan"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -575,7 +591,7 @@ export default function MealPlanPage() {
                             variant="compact"
                             onClick={() => initiateAddRecipe(recipe)}
                             actions={
-                              <Button size="icon" variant="secondary" className="rounded-full h-8 w-8 shrink-0">
+                              <Button size="icon" variant="secondary" className="rounded-full h-8 w-8 shrink-0" aria-label="Add recipe to meal plan">
                                 <Plus className="w-4 h-4" />
                               </Button>
                             }

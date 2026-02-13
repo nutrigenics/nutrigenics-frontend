@@ -22,7 +22,7 @@ export const AuthCard = ({ children, title, subtitle, delay = 0 }: AuthCardProps
         >
             <div className="relative group">
                 {/* Glow effect background */}
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-logo/10 to-emerald-500/10 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200" />
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/10 to-emerald-500/10 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200" />
 
                 <div className="relative bg-white/30 backdrop-blur-2xl border border-white/40 p-8 lg:p-10 rounded-2xl shadow-premium-lg overflow-hidden">
                     {/* Interior highlights */}

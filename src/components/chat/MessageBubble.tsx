@@ -25,7 +25,7 @@ export function MessageBubble({ content, isMyMessage, timestamp, senderName, sen
             )}>
                 <p className="whitespace-pre-wrap leading-relaxed">{content}</p>
                 <span className={cn(
-                    "text-[10px] mt-1 block opacity-70",
+                    "text-xs mt-1 block opacity-70",
                     isMyMessage ? "text-primary-foreground" : "text-muted-foreground"
                 )}>
                     {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

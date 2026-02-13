@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { notificationService, type Notification as ApiNotification } from '@/services/notification.service';
 
 export interface Notification {
@@ -36,7 +36,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     }, []);
 
     // Poll notifications from API
-    const fetchNotifications = async () => {
+    const fetchNotifications = useCallback(async () => {
         const token = localStorage.getItem('access_token');
         if (!token) return;
 
@@ -70,16 +70,23 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             }));
 
             setNotifications(formatted);
-        } catch (error) {
+        } catch {
             // Silently fail if not logged in or API error
         }
-    };
+    }, []);
 
     useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
-        return () => clearInterval(interval);
-    }, []);
+        const initialTimer = window.setTimeout(() => {
+            void fetchNotifications();
+        }, 0);
+        const interval = window.setInterval(() => {
+            void fetchNotifications();
+        }, 30000); // Poll every 30 seconds
+        return () => {
+            window.clearTimeout(initialTimer);
+            window.clearInterval(interval);
+        };
+    }, [fetchNotifications]);
 
     const markAsRead = async (id: string) => {
         try {
@@ -109,7 +116,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     };
 
     const refetch = () => {
-        fetchNotifications();
+        void fetchNotifications();
     };
 
     return (

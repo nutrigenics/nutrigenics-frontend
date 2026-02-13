@@ -30,10 +30,6 @@ export const NutritionGrid: React.FC<NutritionGridProps> = ({
 
     return (
         <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Nutrition Facts
-            </h3>
-
             {/* Main Macros Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 {/* Calories Card */}
@@ -59,7 +55,7 @@ export const NutritionGrid: React.FC<NutritionGridProps> = ({
                         transition={{ delay: index * 0.1 }}
                         className="bg-white p-4 rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-sm"
                     >
-                        <div className="w-16 h-16 mb-2 relative">
+                        <div className="mb-2 relative">
                             <CircularProgress
                                 value={isNaN(50) ? 0 : 50} // Visual indicator only
                                 max={100}
@@ -67,6 +63,7 @@ export const NutritionGrid: React.FC<NutritionGridProps> = ({
                                 color={macro.color} // Pass the color class correctly
                                 showPercentage={false}
                                 showTotal={false}
+                                showText={false}
                             >
                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                     <span className="text-xs font-bold text-gray-700">
@@ -87,13 +84,13 @@ export const NutritionGrid: React.FC<NutritionGridProps> = ({
                 {nutrients.map((item, idx) => (
                     <div
                         key={idx}
-                        className="p-3 bg-gray-50 rounded-xl border border-gray-100"
+                        className="w-full p-4 flex item-center justify-center flex-col text-center rounded-xl border border-gray-100"
                     >
+                        <div>
+                            <span className="text-2xl font-semibold text-gray-900">{item.value}</span> {item.unit}
+                        </div>
                         <div className="text-xs text-gray-500 mb-1">
                             {item.label}
-                        </div>
-                        <div className="font-semibold text-gray-900">
-                            {item.value} {item.unit}
                         </div>
                     </div>
                 ))}

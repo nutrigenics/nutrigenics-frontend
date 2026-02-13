@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { recipeService } from '@/services/recipe.service';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, Flame, Leaf, Beef, Wheat, UtensilsCrossed, Info } from 'lucide-react';
+import { Flame, Leaf, Beef, Wheat, UtensilsCrossed, Info } from 'lucide-react';
 import type { Recipe } from '@/types';
 
 const NUTRIENTS = [
@@ -44,16 +44,9 @@ export function HighNutrientRecipes() {
 
     return (
         <div className="mb-12">
-            <div className="flex items-end justify-between mb-6 px-2">
-                <div>
-                    <h2 className="text-2xl font-bold text-foreground mb-1">Nutrient Focus</h2>
-                    <p className="text-muted-foreground font-medium">Recipes optimized for your health goals</p>
-                </div>
-                <Link to="/recipes">
-                    <Button variant="ghost" className="text-foreground hover:bg-muted font-medium rounded-xl">
-                        View All <ChevronRight className="ml-1 w-4 h-4" />
-                    </Button>
-                </Link>
+            <div>
+                <h2 className="text-2xl font-bold text-foreground mb-1">Nutrient Focus</h2>
+                <p className="text-muted-foreground font-medium">Recipes optimized for your health goals</p>
             </div>
 
             <Tabs
@@ -62,12 +55,12 @@ export function HighNutrientRecipes() {
                 onValueChange={setSelectedNutrient}
                 className="w-full"
             >
-                <TabsList className="mb-6 bg-muted/50 p-1.5 h-auto flex-wrap justify-start rounded-2xl">
+                <TabsList className="mb-6 p-2 h-auto flex-wrap w-fit justify-start rounded-2xl">
                     {NUTRIENTS.map((nutrient) => (
                         <TabsTrigger
                             key={nutrient.id}
                             value={nutrient.id}
-                            className="px-4 py-2.5 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
+                            className="px-6 py-2.5 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all"
                         >
                             <div className="flex items-center gap-2">
                                 <nutrient.icon className="w-4 h-4" />
@@ -131,6 +124,6 @@ export function HighNutrientRecipes() {
                     )}
                 </div>
             </Tabs>
-        </div>
+        </div >
     );
 }

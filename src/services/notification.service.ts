@@ -25,5 +25,9 @@ export const notificationService = {
 
     async clearAll(): Promise<void> {
         await apiClient.delete('/api/v1/notifications/clear_all/');
+    },
+
+    async sendNotification(data: { user_id: number; title: string; message: string; type?: string }): Promise<void> {
+        await apiClient.post('/api/v1/notifications/', data);
     }
 };

@@ -78,7 +78,7 @@ export function RecipeTable({ recipes, onLike, onBookmark }: RecipeTableProps) {
                                 </Avatar>
                                 {/* Floating Badge for Popular Recipes */}
                                 {recipe.bookmark_counter && recipe.bookmark_counter > 10 && (
-                                    <div className="absolute -top-1 -right-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                                    <div className="absolute -top-1 -right-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full shadow-sm">
                                         <Sparkles className="h-2.5 w-2.5 inline" />
                                     </div>
                                 )}
@@ -119,6 +119,7 @@ export function RecipeTable({ recipes, onLike, onBookmark }: RecipeTableProps) {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => onLike(recipe.id)}
+                                    aria-label={recipe.is_liked ? `Unlike ${recipe.recipe_name}` : `Like ${recipe.recipe_name}`}
                                     className={cn(
                                         "h-10 w-10 rounded-xl transition-all duration-200",
                                         recipe.is_liked
@@ -132,6 +133,7 @@ export function RecipeTable({ recipes, onLike, onBookmark }: RecipeTableProps) {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => onBookmark(recipe.id)}
+                                    aria-label={recipe.is_bookmarked ? `Remove bookmark for ${recipe.recipe_name}` : `Bookmark ${recipe.recipe_name}`}
                                     className={cn(
                                         "h-10 w-10 rounded-xl transition-all duration-200",
                                         recipe.is_bookmarked
@@ -243,7 +245,7 @@ export function RecipeTable({ recipes, onLike, onBookmark }: RecipeTableProps) {
                                                                     <span className="text-lg font-bold block">
                                                                         {Math.round(Number(n.nutrient_quantity))}
                                                                     </span>
-                                                                    <span className="text-[10px] font-medium uppercase opacity-80 block truncate">
+                                                                    <span className="text-xs font-medium uppercase opacity-80 block truncate">
                                                                         {label}
                                                                     </span>
                                                                 </div>

@@ -1,20 +1,21 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+
 import {
-  ArrowLeft,
+
   Clock,
   Flame,
-  Utensils,
   Heart,
   Bookmark,
   Plus,
   Check,
-  ChefHat
+  ChefHat,
+  CalendarDays,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ import { planService } from "@/services/plan.service";
 import { recipeService } from "@/services/recipe.service";
 import { NutritionGrid } from "@/components/recipes/NutritionGrid";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 // --- Types ---
 interface Recipe {
@@ -132,9 +134,9 @@ export default function RecipeDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+      <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-4xl mx-auto space-y-8">
-          <Skeleton className="h-[40vh] w-full rounded-3xl" />
+          <Skeleton className="h-[40vh] w-full rounded-xl" />
           <div className="space-y-4">
             <Skeleton className="h-10 w-3/4" />
             <Skeleton className="h-6 w-1/2" />
@@ -162,7 +164,6 @@ export default function RecipeDetailPage() {
   const previewFat = getNutrientValue('Fat') * portion;
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-  // Ensure image URL is absolute. If it starts with /media, append base URL.
   const imageUrl = recipe.image
     ? recipe.image.startsWith('http')
       ? recipe.image
@@ -170,151 +171,135 @@ export default function RecipeDetailPage() {
     : '';
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen">
 
-      {/* --- HERO SECTION --- */}
-      <div className="relative h-[45vh] lg:h-[50vh] w-full overflow-hidden bg-slate-900">
-        <motion.div
-          initial={{ scale: 1.1 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.8 }}
-          className="absolute inset-0"
-        >
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={recipe.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-              <span className="text-slate-500 font-medium">No Image Available</span>
-            </div>
-          )}
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-        </motion.div>
+      <div className="w-full">
 
-        {/* Top Navigation */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
+        {/* Navigation */}
+        {/* <div className="flex items-center justify-between mb-8">
           <Button
             variant="ghost"
-            size="icon"
-            className="rounded-full bg-black/20 backdrop-blur-md hover:bg-black/30 text-white"
+            className="group pl-0 hover:bg-transparent hover:text-emerald-600 transition-colors"
             onClick={() => navigate(-1)}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-emerald-50 transition-colors mr-3">
+              <ArrowLeft className="w-5 h-5 text-gray-900 group-hover:text-emerald-600" />
+            </div>
+            <span className="font-semibold text-lg text-gray-900 group-hover:text-emerald-600">Back</span>
           </Button>
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full bg-black/20 backdrop-blur-md hover:bg-black/30 text-white"
-              onClick={toggleLike}
-            >
-              <Heart className={`w-5 h-5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full bg-black/20 backdrop-blur-md hover:bg-black/30 text-white"
-              onClick={toggleBookmark}
-            >
-              <Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-yellow-500 text-yellow-500' : ''}`} />
-            </Button>
-          </div>
-        </div>
 
-        {/* Hero Content */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10 z-10">
-          <div className="max-w-5xl mx-auto">
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <div className="flex flex-wrap gap-2 mb-3">
+
+        </div> */}
+
+        {/* --- Top Section: Image & Key Info --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16 border p-6 rounded-xl bg-white">
+          {/* Left: Image */}
+          <div
+            className="relative aspect-[4/3] rounded-2xl"
+          >
+            {imageUrl ? (
+              <img src={imageUrl} alt={recipe.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-white flex items-center justify-center text-gray-400 border rounded-2xl">No Image</div>
+            )}
+          </div>
+
+          {/* Right: Details & Actions */}
+          <div className="flex flex-col justify-start space-y-8">
+            <div>
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight tracking-tight line-clamp-2">
+                {recipe.name}
+              </h1>
+              <div className="flex flex-wrap gap-2 mb-6">
                 {recipe.tags?.map((tag: string | any, idx) => {
                   const label = typeof tag === 'string' ? tag : tag.name;
                   const key = typeof tag === 'string' ? tag : tag.id;
                   return (
-                    <Badge key={`${key}-${idx}`} variant="secondary" className="bg-white/20 backdrop-blur-md text-white border-none">
+                    <Badge key={`${key}-${idx}`} variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-100 px-3 py-1 text-sm font-medium">
                       {label}
                     </Badge>
                   );
-                }) || (
-                    <Badge variant="secondary" className="bg-white/20 backdrop-blur-md text-white border-none">
-                      Healthy
-                    </Badge>
-                  )}
+                }) || <Badge variant="secondary" className="bg-green-50 text-green-700">Healthy</Badge>}
               </div>
-              <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 leading-tight shadow-sm">
-                {recipe.name}
-              </h1>
-            </motion.div>
-          </div>
-        </div>
-      </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-20">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-8">
-
-          {/* --- LEFT COLUMN: CONTENT --- */}
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="space-y-8"
-          >
-            {/* Stats Card */}
-            <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-200/50 flex items-center justify-around border border-gray-100">
-              <div className="flex flex-col items-center gap-1">
-                <div className="p-2.5 bg-blue-50 rounded-full text-blue-600">
-                  <Clock className="w-5 h-5" />
+              {/* Key Stats */}
+              <div className="flex items-center gap-8 text-gray-700 mb-8">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-emerald-500" />
+                  <span className="font-semibold text-lg">{recipe.time}</span>
                 </div>
-                <span className="text-sm font-medium text-gray-500">Time</span>
-                <span className="font-bold text-gray-900">{recipe.time}</span>
-              </div>
-              <div className="w-px h-10 bg-gray-100" />
-              <div className="flex flex-col items-center gap-1">
-                <div className="p-2.5 bg-orange-50 rounded-full text-orange-600">
-                  <Flame className="w-5 h-5" />
+                <div className="w-px h-6 bg-gray-200" />
+                <div className="flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-rose-500" />
+                  <span className="font-semibold text-lg">{Math.round(recipe.calories || 0)} <span className="text-sm text-gray-400 font-normal">kcal</span></span>
                 </div>
-                <span className="text-sm font-medium text-gray-500">Calories</span>
-                <span className="font-bold text-gray-900">{Math.round(recipe.calories || 0)}</span>
-              </div>
-              <div className="w-px h-10 bg-gray-100" />
-              <div className="flex flex-col items-center gap-1">
-                <div className="p-2.5 bg-green-50 rounded-full text-green-600">
-                  <ChefHat className="w-5 h-5" />
+                <div className="w-px h-6 bg-gray-200" />
+                <div className="flex items-center gap-2">
+                  <ChefHat className="w-5 h-5 text-emerald-500" />
+                  <span className="font-semibold text-lg">{recipe.servings} <span className="text-sm text-gray-400 font-normal">servings</span></span>
                 </div>
-                <span className="text-sm font-medium text-gray-500">Servings</span>
-                <span className="font-bold text-gray-900">{recipe.servings} pp</span>
               </div>
             </div>
 
+            {/* Primary Action */}
+            <div className="flex gap-3">
+              <Button
+                size="lg"
+                className="flex-1 md:flex-none h-14 px-8 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-semibold flex items-center justify-center gap-1 transition-transform active:scale-95"
+                onClick={() => setShowAddModal(true)}
+              >
+                <Plus className="w-6 h-6" strokeWidth={3} />
+                Add to Meal Plan
+              </Button>
+
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-14 w-14 rounded-2xl border-2 border-gray-200 bg-white hover:bg-red-50 hover:border-red-100 hover:text-red-500 transition-all active:scale-95"
+                onClick={toggleLike}
+                aria-label={isLiked ? "Unlike recipe" : "Like recipe"}
+              >
+                <Heart className={cn("w-6 h-6 transition-colors", isLiked ? 'fill-red-500 text-red-500' : 'text-gray-400')} />
+              </Button>
+
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-14 w-14 rounded-2xl border-2 border-gray-200 bg-white hover:bg-amber-50 hover:border-amber-100 hover:text-amber-500 transition-all active:scale-95"
+                onClick={toggleBookmark}
+                aria-label={isBookmarked ? "Remove bookmark" : "Bookmark recipe"}
+              >
+                <Bookmark className={cn("w-6 h-6 transition-colors", isBookmarked ? 'fill-amber-400 text-amber-400' : 'text-gray-400')} />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr,400px] gap-12">
+
+          {/* --- LEFT COLUMN: Ingredients & Instructions --- */}
+          <div className="space-y-12">
+
             {/* Ingredients */}
-            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
-                  <Utensils className="w-5 h-5" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-900">Ingredients</h2>
-                <span className="ml-auto text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                  {(recipe.ingredients || []).length} items
+            <div className="w-full bg-white p-6 rounded-2xl">
+              <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Ingredients</h2>
+                <span className="text-sm font-medium text-gray-400">
+                  {recipe.ingredients.length} items
                 </span>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
+              <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
                 {(recipe.ingredients || []).map((ingredient, idx) => {
                   const label = typeof ingredient === 'string' ? ingredient : `${ingredient.quantity} ${ingredient.ingredient_name}`;
                   return (
-                    <label key={idx} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group">
-                      <div className="relative flex items-center">
-                        <input type="checkbox" className="peer w-5 h-5 border-2 border-gray-300 rounded-full checked:bg-emerald-500 checked:border-emerald-500 appearance-none transition-all" />
-                        <Check className="w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none" />
+                    <label key={idx} className="flex items-start gap-4 p-3 -ml-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group">
+                      <div className="relative flex items-center mt-0.5">
+                        <input type="checkbox" className="peer w-5 h-5 border-2 border-gray-300 rounded-md checked:bg-emerald-600 checked:border-emerald-600 appearance-none transition-all" />
+                        <Check className="w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity" />
                       </div>
-                      <span className="text-gray-700 group-hover:text-gray-900 transition-colors leading-relaxed">
+                      <span className="text-gray-600 group-hover:text-gray-900 font-medium transition-colors leading-relaxed text-base">
                         {label}
                       </span>
                     </label>
@@ -324,27 +309,26 @@ export default function RecipeDetailPage() {
             </div>
 
             {/* Instructions */}
-            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 text-sm font-bold">
-                  #
-                </span>
-                Instructions
-              </h2>
+            <div className="w-full bg-white p-6 rounded-2xl">
+              <div className="flex items-center gap-3 mb-8 border-b border-gray-100 pb-4">
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Instructions</h2>
+              </div>
 
-              <div className="space-y-8">
+              <div className="space-y-10 pl-3">
                 {(recipe.instructions || []).map((step, idx) => (
-                  <div key={idx} className="relative flex gap-6 group">
-                    <div className="flex flex-col items-center">
-                      <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm border border-indigo-100 z-10 group-hover:scale-110 transition-transform">
+                  <div key={idx} className="relative flex gap-8 group">
+                    {/* Vertical Line */}
+                    {idx !== (recipe.instructions || []).length - 1 && (
+                      <div className="absolute left-[19px] top-12 bottom-[-40px] w-[2px] bg-gray-100 group-hover:bg-emerald-50 transition-colors" />
+                    )}
+
+                    <div className="flex flex-col items-center flex-none">
+                      <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-base border-2 border-emerald-100 group-hover:scale-110 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 shadow-sm border-emerald-100">
                         {idx + 1}
                       </div>
-                      {idx !== (recipe.instructions || []).length - 1 && (
-                        <div className="w-0.5 bg-gray-100 flex-1 mt-2 mb-2" />
-                      )}
                     </div>
-                    <div className="pb-2">
-                      <p className="text-gray-700 leading-relaxed text-lg">
+                    <div className="pt-1.5 pb-4">
+                      <p className="text-gray-700 leading-relaxed text-lg group-hover:text-gray-900 transition-colors">
                         {step}
                       </p>
                     </div>
@@ -352,101 +336,85 @@ export default function RecipeDetailPage() {
                 ))}
               </div>
             </div>
-          </motion.div>
+          </div>
 
-          {/* --- RIGHT COLUMN: NUTRITION & ACTIONS --- */}
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="space-y-6"
-          >
-            {/* Add to Plan Card (Sticky on Desktop) */}
-            <div className="sticky top-6 space-y-6">
-              <div className="bg-white rounded-3xl p-6 shadow-xl shadow-indigo-100/50 border border-gray-100">
-                <div className="mb-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Add to Meal Plan</h3>
-                  <p className="text-sm text-gray-500">Track this recipe in your daily nutrition goals.</p>
-                </div>
-                <Button
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-200/50 rounded-xl h-12 text-base font-semibold"
-                  onClick={() => setShowAddModal(true)}
-                >
-                  <Plus className="w-5 h-5 mr-2" />
-                  Add to Daily Plan
-                </Button>
-              </div>
-
-              {/* Nutrition Component */}
-              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <NutritionGrid
-                  calories={recipe.calories || 0}
-                  protein={getNutrientValue('Protein')}
-                  carbs={getNutrientValue('Carbohydrates')}
-                  fat={getNutrientValue('Fat')}
-                  nutrients={[
-                    { label: 'Fiber', value: getNutrientValue('Fiber'), unit: 'g' },
-                    { label: 'Sugar', value: getNutrientValue('Sugars'), unit: 'g' },
-                    { label: 'Sodium', value: getNutrientValue('Sodium'), unit: 'mg' },
-                    { label: 'Cholesterol', value: getNutrientValue('Cholesterol'), unit: 'mg' },
-                    { label: 'Sat. Fat', value: getNutrientValue('Saturated Fat'), unit: 'g' },
-                    { label: 'Iron', value: getNutrientValue('Iron'), unit: 'mg' },
-                  ]}
-                />
-              </div>
+          {/* --- RIGHT COLUMN: NUTRITION (Now simplified as action is at top) --- */}
+          <div className="space-y-6 mb-16">
+            <div className="bg-white rounded-[2rem] p-8 border border-gray-100 sticky top-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <span className="w-1.5 h-5 bg-emerald-500 rounded-full" /> Nutrition Facts
+              </h3>
+              <NutritionGrid
+                calories={recipe.calories || 0}
+                protein={getNutrientValue('Protein')}
+                carbs={getNutrientValue('Carbohydrates')}
+                fat={getNutrientValue('Fat')}
+                nutrients={[
+                  { label: 'Fiber', value: getNutrientValue('Fiber'), unit: 'g' },
+                  { label: 'Sugar', value: getNutrientValue('Sugars'), unit: 'g' },
+                  { label: 'Sodium', value: getNutrientValue('Sodium'), unit: 'mg' },
+                  { label: 'Cholesterol', value: getNutrientValue('Cholesterol'), unit: 'mg' },
+                  { label: 'Sat. Fat', value: getNutrientValue('Saturated Fat'), unit: 'g' },
+                  { label: 'Iron', value: getNutrientValue('Iron'), unit: 'mg' },
+                ]}
+              />
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
 
       {/* --- ADD TO PLAN DIALOG --- */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="sm:max-w-md bg-white border border-gray-100 p-0 overflow-hidden rounded-3xl">
-          <div className="p-6 bg-gradient-to-b from-emerald-50 to-white">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                <span className="p-2 bg-white rounded-lg shadow-sm">
-                  📅
-                </span>
-                Add to Meal Plan
-              </DialogTitle>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-md bg-[#F8FAFC] border-0 shadow-2xl p-0 overflow-hidden rounded-xl gap-0">
+          <div className="h-16 px-6 bg-white border-b border-gray-100 flex items-center justify-between">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-gray-900">
+              <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                <CalendarDays className="w-4 h-4" />
+              </span>
+              Add to Plan
+            </DialogTitle>
+            <Button variant="ghost" size="icon" onClick={() => setShowAddModal(false)} className="rounded-full text-gray-400 hover:text-gray-900 hover:bg-gray-50" aria-label="Close add to meal plan dialog">
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
 
-            <div className="space-y-6 mt-6">
+          <div className="p-6 space-y-6">
 
-              {/* Date & Type Selection */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</Label>
-                  <Input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="bg-white border-gray-200 h-10 rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Meal</Label>
-                  <Select value={selectedMealType} onValueChange={setSelectedMealType}>
-                    <SelectTrigger className="bg-white border-gray-200 h-10 rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="breakfast"><span className="flex items-center gap-2">🍳 Breakfast</span></SelectItem>
-                      <SelectItem value="lunch"><span className="flex items-center gap-2">☀️ Lunch</span></SelectItem>
-                      <SelectItem value="dinner"><span className="flex items-center gap-2">🌙 Dinner</span></SelectItem>
-                      <SelectItem value="snack"><span className="flex items-center gap-2">🍎 Snack</span></SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            {/* Date & Type Selection */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Date</Label>
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-white border-0 shadow-sm h-12 rounded-xl text-gray-900 font-medium focus-visible:ring-1 focus-visible:ring-emerald-200"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Meal Type</Label>
+                <Select value={selectedMealType} onValueChange={setSelectedMealType}>
+                  <SelectTrigger className="bg-white border-0 shadow-sm h-12 rounded-xl text-gray-900 font-medium focus:ring-1 focus:ring-emerald-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="breakfast"><span className="flex items-center gap-2">🍳 Breakfast</span></SelectItem>
+                    <SelectItem value="lunch"><span className="flex items-center gap-2">☀️ Lunch</span></SelectItem>
+                    <SelectItem value="dinner"><span className="flex items-center gap-2">🌙 Dinner</span></SelectItem>
+                    <SelectItem value="snack"><span className="flex items-center gap-2">🍎 Snack</span></SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Portion Slider/Input */}
+            <div className="space-y-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+              <div className="flex justify-between items-center">
+                <Label className="font-semibold text-gray-900">Servings</Label>
+                <span className="text-2xl font-bold text-emerald-600 tracking-tight">{portion}x</span>
               </div>
 
-              {/* Portion Slider/Input */}
-              <div className="space-y-3 bg-white p-4 rounded-xl border border-gray-100">
-                <div className="flex justify-between items-center">
-                  <Label className="font-semibold text-gray-900">Servings</Label>
-                  <span className="text-2xl font-bold text-emerald-600">{portion}</span>
-                </div>
+              <div className="pt-2">
                 <input
                   type="range"
                   min="0.5"
@@ -454,44 +422,52 @@ export default function RecipeDetailPage() {
                   step="0.5"
                   value={portion}
                   onChange={(e) => setPortion(parseFloat(e.target.value))}
-                  className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                  className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-emerald-600"
                 />
-                <div className="flex justify-between text-xs text-gray-400">
+                <div className="flex justify-between text-xs font-bold text-gray-300 mt-2 uppercase tracking-wider">
                   <span>0.5</span>
+                  <span>1</span>
+                  <span>2</span>
+                  <span>3</span>
+                  <span>4</span>
                   <span>5</span>
                 </div>
               </div>
+            </div>
 
-              {/* Nutrition Preview */}
-              <div className="bg-gray-50 p-4 rounded-xl border border-dashed border-gray-200">
-                <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-3">Nutrition Impact</Label>
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <div>
-                    <div className="text-lg font-bold text-gray-900">{Math.round(previewCalories)}</div>
-                    <div className="text-[10px] text-gray-500 uppercase">Kcal</div>
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold text-gray-900">{Math.round(previewProtein)}g</div>
-                    <div className="text-[10px] text-gray-500 uppercase">Prot</div>
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold text-gray-900">{Math.round(previewCarbs)}g</div>
-                    <div className="text-[10px] text-gray-500 uppercase">Carb</div>
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold text-gray-900">{Math.round(previewFat)}g</div>
-                    <div className="text-[10px] text-gray-500 uppercase">Fat</div>
-                  </div>
+            {/* Nutrition Preview */}
+            <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100/50">
+              <Label className="text-xs font-bold text-emerald-400 uppercase tracking-wider block mb-4 text-center">Projected Nutrition</Label>
+              <div className="grid grid-cols-4 gap-2 text-center divide-x divide-emerald-200/50">
+                <div className="px-1">
+                  <div className="text-xl font-bold text-gray-900">{Math.round(previewCalories)}</div>
+                  <div className="text-xs text-gray-500 font-medium mt-0.5">Kcal</div>
+                </div>
+                <div className="px-1">
+                  <div className="text-xl font-bold text-gray-900">{Math.round(previewProtein)}g</div>
+                  <div className="text-xs text-gray-500 font-medium mt-0.5">Prot</div>
+                </div>
+                <div className="px-1">
+                  <div className="text-xl font-bold text-gray-900">{Math.round(previewCarbs)}g</div>
+                  <div className="text-xs text-gray-500 font-medium mt-0.5">Carb</div>
+                </div>
+                <div className="px-1">
+                  <div className="text-xl font-bold text-gray-900">{Math.round(previewFat)}g</div>
+                  <div className="text-xs text-gray-500 font-medium mt-0.5">Fat</div>
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="mt-8 flex gap-3">
-              <Button variant="ghost" onClick={() => setShowAddModal(false)} className="flex-1 rounded-xl">Cancel</Button>
-              <Button onClick={handleAddToPlan} disabled={addingToPlan} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
-                {addingToPlan ? "Adding..." : "Add to Plan"}
-              </Button>
-            </div>
+          <div className="p-6 pt-2 flex gap-3 bg-white border-t border-gray-50">
+            <Button variant="ghost" onClick={() => setShowAddModal(false)} className="flex-1 rounded-xl h-12 font-medium text-gray-500 hover:text-gray-900">Cancel</Button>
+            <Button
+              onClick={handleAddToPlan}
+              disabled={addingToPlan}
+              className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-12 shadow-lg shadow-emerald-200 font-semibold"
+            >
+              {addingToPlan ? "Adding..." : "Add to Plan"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

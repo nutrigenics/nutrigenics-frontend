@@ -1,12 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 // MainLayout removed
 // import { MainLayout } from '@/layouts/MainLayout';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Search, SlidersHorizontal, Sparkles, X, Timer, Utensils } from 'lucide-react';
+import { Search, SlidersHorizontal, Sparkles, Timer, Utensils } from 'lucide-react';
 import { recipeService } from '@/services/recipe.service';
 import type { Recipe } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,51 +13,49 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function SearchRecipesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Recipe[]>([]);
+  const [recommendedRecipes, setRecommendedRecipes] = useState<Recipe[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // Advanced filters
-  const [cuisines, setCuisines] = useState<string[]>([]);
+  const [filterOptions, setFilterOptions] = useState<{
+    cuisines: string[];
+    diets: string[];
+    meal_types: string[];
+  }>({ cuisines: [], diets: [], meal_types: [] });
+
+  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
+  const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
+  const [selectedMealTypes, setSelectedMealTypes] = useState<string[]>([]);
+
   const [minTime, setMinTime] = useState('');
   const [maxTime, setMaxTime] = useState('');
 
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // Stats state
+  const [stats, setStats] = useState({ total: 0, time: 0 });
 
-    if (!searchQuery.trim()) return;
-
-    try {
-      setIsLoading(true);
-      setHasSearched(true);
-      const results = await recipeService.searchRecipes(searchQuery);
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Error searching recipes:', error);
-      setSearchResults([]);
-    } finally {
-      setIsLoading(false);
+  // Fetch filters and stats on mount
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [filters, recipes, popular] = await Promise.all([
+          recipeService.getFilters(),
+          recipeService.getAllRecipes({ page: 1 }), // Get count
+          recipeService.getPopularRecipes(4)
+        ]);
+        setFilterOptions(filters);
+        setRecommendedRecipes(popular);
+        setStats({
+          total: recipes.count || 0,
+          time: 15 // Mock average time or just static "15min avg"
+        });
+      } catch (error) {
+        console.error("Failed to load initial data", error);
+      }
     }
-  };
-
-  const handleAdvancedFilter = async () => {
-    try {
-      setIsLoading(true);
-      const filters = {
-        cuisine: cuisines,
-        min_time: minTime ? parseInt(minTime) : undefined,
-        max_time: maxTime ? parseInt(maxTime) : undefined,
-      };
-      const results = await recipeService.filterRecipes(filters);
-      setSearchResults(results);
-      setHasSearched(true);
-      setShowFilters(false);
-    } catch (error) {
-      console.error('Error filtering recipes:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    loadData();
+  }, []);
 
   const handleBookmark = async (recipeId: number) => {
     try {
@@ -76,9 +73,62 @@ export default function SearchRecipesPage() {
     }
   };
 
+  const handleSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    try {
+      setIsLoading(true);
+      setHasSearched(true);
+
+      if (selectedCuisines.length > 0 || selectedDiets.length > 0 || selectedMealTypes.length > 0 || minTime || maxTime) {
+        const results = await recipeService.filterRecipes({
+          cuisine: selectedCuisines,
+          diet: selectedDiets,
+          meal_types: selectedMealTypes,
+          min_time: minTime ? parseInt(minTime) : undefined,
+          max_time: maxTime ? parseInt(maxTime) : undefined,
+        });
+        let finalResults = results;
+        if (searchQuery.trim()) {
+          const lowerQ = searchQuery.toLowerCase();
+          finalResults = results.filter((r: Recipe) =>
+            r?.recipe_name?.toLowerCase().includes(lowerQ)
+          );
+        }
+        setSearchResults(finalResults);
+      } else if (searchQuery.trim()) {
+        const results = await recipeService.searchRecipes(searchQuery);
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
+
+    } catch (error) {
+      console.error('Error searching recipes:', error);
+      setSearchResults([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAdvancedFilter = () => {
+    handleSearch();
+    setShowFilters(false);
+  };
+
+  const toggleSelection = (list: string[], setList: (l: string[]) => void, item: string) => {
+    if (list.includes(item)) {
+      setList(list.filter(i => i !== item));
+    } else {
+      setList([...list, item]);
+    }
+  };
+
   const clearFilters = () => {
     setSearchQuery('');
-    setCuisines([]);
+    setSelectedCuisines([]);
+    setSelectedDiets([]);
+    setSelectedMealTypes([]);
     setMinTime('');
     setMaxTime('');
     setSearchResults([]);
@@ -86,205 +136,346 @@ export default function SearchRecipesPage() {
   }
 
   return (
-    <>
-      {/* Hero Header */}
-      <Card className="w-full mb-8 p-8 md:p-10 rounded-[2.5rem] relative overflow-hidden shadow-sm border-border">
-        <div className="relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 mb-4"
-          >
-            <div className="p-1.5 bg-muted rounded-lg">
-              <Search className="w-5 h-5 text-foreground" />
-            </div>
-            <span className="text-muted-foreground text-xs font-bold uppercase tracking-wide">Explore</span>
-          </motion.div>
+    <div className="relative h-full overflow-hidden">
 
-          <motion.h1
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-4xl md:text-5xl font-bold text-foreground mb-2 tracking-tight"
-          >
-            Find Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-foreground to-muted-foreground">Flavor</span>
-          </motion.h1>
+      <div className="relative z-10 mx-auto">
 
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-lg text-muted-foreground max-w-lg mb-8"
-          >
-            Search for specific recipes, ingredients, or explore by cuisine and time.
-          </motion.p>
+        {/* Full Width Header Split - Reduced Sizes */}
+        <div className="flex flex-col lg:flex-row items-end justify-between gap-8 mb-6">
 
-          <motion.form
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            onSubmit={handleSearch}
-            className="flex flex-col md:flex-row gap-4 max-w-2xl"
-          >
-            <div className="flex-1 relative group">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors w-5 h-5" />
+          {/* Left: Text Content */}
+          <div className="flex-1 max-w-3xl">
+
+            <motion.h1
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="text-3xl md:text-5xl font-bold text-slate-900 tracking-tight mb-3 leading-tight"
+            >
+              Discover Recipes
+            </motion.h1>
+
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-base text-slate-500 max-w-xl"
+            >
+              Search thousands of nutritionally balanced recipes tailored to your goals.
+            </motion.p>
+          </div>
+        </div>
+
+        {/* Right: Stats Grid - Minimal & Premium */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3 }}
+          className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10"
+        >
+          <div className="flex flex-col items-center justify-center p-6 border bg-white rounded-xl">
+            <h3 className="text-3xl font-bold text-slate-900 tracking-tight">{stats.total || '0'}</h3>
+            <p className="text-xs font-bold text-slate-400 uppercase">Recipes</p>
+          </div>
+          <div className="flex flex-col items-center justify-center p-6 border bg-white rounded-xl">
+            <h3 className="text-3xl font-bold text-slate-900 tracking-tight">{filterOptions.cuisines.length || '0'}</h3>
+            <p className="text-xs font-bold text-slate-400 uppercase">Cuisines</p>
+          </div>
+          <div className="flex flex-col items-center justify-center p-6 border bg-white rounded-xl">
+            <h3 className="text-3xl font-bold text-slate-900 tracking-tight">{filterOptions.diets.length || '0'}</h3>
+            <p className="text-xs font-bold text-slate-400 uppercase">Diets</p>
+          </div>
+          <div className="flex flex-col items-center justify-center p-6 border bg-white rounded-xl">
+            <h3 className="text-3xl font-bold text-slate-900 tracking-tight">{filterOptions.meal_types.length || '0'}</h3>
+            <p className="text-xs font-bold text-slate-400 uppercase">Meal Types</p>
+          </div>
+        </motion.div>
+
+        {/* Search Bar Container - Refined Height */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="w-full relative z-20 mb-6"
+        >
+          <form onSubmit={handleSearch} className="relative group">
+            <div className="relative h-16 flex items-center gap-3 bg-white px-2 py-2 rounded-full shadow-[0_2px_15px_rgb(0,0,0,0.04)] border border-slate-200 focus-within:border-emerald-500/50 focus-within:ring-4 focus-within:ring-emerald-500/5 transition-all">
+
+              <div className="w-12 h-12 flex items-center justify-center rounded-full text-slate-400 bg-gray-100">
+                <Search className="w-5 h-5" />
+              </div>
+
               <Input
                 type="text"
                 placeholder="Search recipes, ingredients..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 h-14 bg-muted/50 border-border focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-2xl text-lg"
+                className="flex-1 h-full bg-transparent border-none text-base placeholder:text-slate-400 focus-visible:ring-0 px-0 font-medium text-slate-700"
               />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="h-14 px-8 rounded-2xl font-bold shadow-lg"
-              >
-                {isLoading ? 'Searching...' : 'Search'}
-              </Button>
-              <Button
-                type="button"
-                variant={showFilters ? "default" : "outline"}
-                onClick={() => setShowFilters(!showFilters)}
-                className={`h-14 px-4 rounded-2xl border-2 font-bold transition-all ${showFilters ? '' : 'border-border hover:bg-muted'}`}
-              >
-                <SlidersHorizontal className="w-5 h-5" />
-              </Button>
-            </div>
-          </motion.form>
-        </div>
 
-        {/* Decorative Background */}
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl opacity-60 translate-y-1/2 -translate-x-1/3" />
-      </Card>
+              {/* Filter Toggle */}
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-px bg-slate-100 mx-1" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`h-12 px-6 rounded-full text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all gap-2 text-sm font-medium ${showFilters ? 'bg-emerald-50 text-emerald-600' : ''}`}
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  <span className="hidden sm:inline">Filters</span>
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="h-12 px-8 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white transition-all font-medium text-sm"
+                >
+                  {isLoading ? '...' : 'Search'}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </motion.div>
 
-      <AnimatePresence>
-        {showFilters && (
+        {/* Quick Suggestion Chips */}
+        {!hasSearched && !showFilters && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="flex flex-wrap justify-center gap-2 mt-4 max-w-2xl mx-auto mb-12"
+            >
+              {(filterOptions.meal_types.length > 0 ? filterOptions.meal_types.slice(0, 5) : ['Breakfast', 'Lunch', 'Dinner', 'Snack']).map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => { setSelectedMealTypes([tag]); handleSearch(); }}
+                  className="px-4 py-2 rounded-full bg-white border border-slate-100 text-xs font-medium text-slate-600 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm"
+                >
+                  {tag}
+                </button>
+              ))}
+            </motion.div>
+
+            {/* Recommended Recipes Section */}
+            {recommendedRecipes.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                className="mb-12"
+              >
+                <div className="flex items-center gap-2 mb-6">
+                  <Sparkles className="w-5 h-5 text-emerald-500" />
+                  <h2 className="text-xl font-bold text-slate-900">Recommended for You</h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {recommendedRecipes.map((recipe, index) => (
+                    <motion.div
+                      key={recipe.pk || recipe.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.6 + (index * 0.1) }}
+                    >
+                      <RecipeCard
+                        recipe={recipe}
+                        onBookmark={handleBookmark}
+                        onLike={handleLike}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </>
+        )}
+
+        {/* Expandable Filters */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, marginTop: 0 }}
+              animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
+              exit={{ opacity: 0, height: 0, marginTop: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="w-full max-w-8xl w-full h-full mx-auto overflow-hidden"
+            >
+              <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-xl shadow-slate-200/50">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+
+                  {/* Time Section */}
+                  <div className="md:col-span-1 border-b md:border-b-0 md:border-r border-slate-100 pb-6 md:pb-0 md:pr-6">
+                    <Label className="text-xs font-bold text-slate-900 uppercase mb-3 block">Preparation Time</Label>
+                    <div className="space-y-2.5">
+                      <div className="relative">
+                        <Timer className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                        <Input
+                          type="number"
+                          value={minTime}
+                          onChange={(e) => setMinTime(e.target.value)}
+                          placeholder="Min Minutes"
+                          className="pl-8 h-9 rounded-lg bg-slate-50 border-slate-100 focus:bg-white text-xs focus:ring-emerald-500/20 focus:border-emerald-500"
+                        />
+                      </div>
+                      <div className="relative">
+                        <Timer className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                        <Input
+                          type="number"
+                          value={maxTime}
+                          onChange={(e) => setMaxTime(e.target.value)}
+                          placeholder="Max Minutes"
+                          className="pl-8 h-9 rounded-lg bg-slate-50 border-slate-100 focus:bg-white text-xs focus:ring-emerald-500/20 focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filter Lists */}
+                  <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+
+                    {/* Meal Types */}
+                    <div>
+                      <Label className="text-xs font-bold text-slate-900 uppercase mb-2.5 flex items-center gap-2">
+                        Meal Type
+                      </Label>
+                      <div className="flex flex-wrap gap-1.5 border p-2 rounded-lg">
+                        {filterOptions.meal_types.length > 0 ? filterOptions.meal_types.map(type => (
+                          <button
+                            key={type}
+                            onClick={() => toggleSelection(selectedMealTypes, setSelectedMealTypes, type)}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${selectedMealTypes.includes(type)
+                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-200 hover:bg-emerald-50'
+                              }`}
+                          >
+                            {type}
+                          </button>
+                        )) : <span className="text-xs text-slate-400 italic">No meal types found</span>}
+                      </div>
+                    </div>
+
+                    {/* Cuisines */}
+                    <div>
+                      <Label className="text-xs font-bold text-slate-900 uppercase mb-2.5 block">Cuisine</Label>
+                      <div className="flex flex-wrap gap-1.5 border p-2 rounded-lg overflow-y-auto pr-1 custom-scrollbar">
+                        {filterOptions.cuisines.length > 0 ? filterOptions.cuisines.map(cuisine => (
+                          <button
+                            key={cuisine}
+                            onClick={() => toggleSelection(selectedCuisines, setSelectedCuisines, cuisine)}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${selectedCuisines.includes(cuisine)
+                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-200 hover:bg-emerald-50'
+                              }`}
+                          >
+                            {cuisine}
+                          </button>
+                        )) : <span className="text-xs text-slate-400 italic">No cuisines found</span>}
+                      </div>
+                    </div>
+
+                    {/* Diets */}
+                    <div>
+                      <Label className="text-xs font-bold text-slate-900 uppercase mb-2.5 block">Dietary</Label>
+                      <div className="flex flex-wrap gap-1.5 border p-2 rounded-lg">
+                        {filterOptions.diets.length > 0 ? filterOptions.diets.map(diet => (
+                          <button
+                            key={diet}
+                            onClick={() => toggleSelection(selectedDiets, setSelectedDiets, diet)}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${selectedDiets.includes(diet)
+                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-200 hover:bg-emerald-50'
+                              }`}
+                          >
+                            {diet}
+                          </button>
+                        )) : <span className="text-xs text-slate-400 italic">No diets found</span>}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Filter Actions */}
+                <div className="flex justify-between items-center pt-4 border-t border-slate-100 mt-4">
+                  <div className="flex gap-2">
+                    {(selectedCuisines.length > 0 || selectedDiets.length > 0 || selectedMealTypes.length > 0 || minTime || maxTime) && (
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                        {selectedCuisines.length + selectedDiets.length + selectedMealTypes.length + (minTime ? 1 : 0) + (maxTime ? 1 : 0)} filters active
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" onClick={clearFilters} className="h-9 px-5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full text-xs">
+                      Clear All
+                    </Button>
+                    <Button onClick={handleAdvancedFilter} disabled={isLoading} className="h-9 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold shadow-sm">
+                      Apply Filters
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      </div>
+
+      {/* Results Section */}
+      <div className="container mx-auto px-4 md:px-8 pb-20">
+        {hasSearched && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden mb-8"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-8"
           >
-            <Card className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-6 md:p-8 border-border rounded-[2rem] shadow-lg">
+            <div className="flex items-end justify-between mb-8 border-b border-slate-100 pb-4">
               <div>
-                <Label htmlFor="minTime" className="text-foreground font-bold mb-2 block">Min Time (mins)</Label>
-                <div className="relative">
-                  <Timer className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="minTime"
-                    type="number"
-                    value={minTime}
-                    onChange={(e) => setMinTime(e.target.value)}
-                    placeholder="0"
-                    className="pl-9 h-12 rounded-xl bg-muted/50 border-border"
-                  />
-                </div>
+                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                  Search Results
+                  <span className="text-sm font-normal text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                    {searchResults.length}
+                  </span>
+                </h2>
               </div>
+            </div>
 
-              <div>
-                <Label htmlFor="maxTime" className="text-foreground font-bold mb-2 block">Max Time (mins)</Label>
-                <div className="relative">
-                  <Timer className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="maxTime"
-                    type="number"
-                    value={maxTime}
-                    onChange={(e) => setMaxTime(e.target.value)}
-                    placeholder="120"
-                    className="pl-9 h-12 rounded-xl bg-muted/50 border-border"
-                  />
-                </div>
+            {searchResults.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
+                {searchResults.map((recipe, index) => (
+                  <motion.div
+                    key={recipe.pk}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <RecipeCard
+                      recipe={recipe}
+                      onBookmark={handleBookmark}
+                      onLike={handleLike}
+                    />
+                  </motion.div>
+                ))}
               </div>
-
-              <div className="lg:col-span-2">
-                <Label className="text-foreground font-bold mb-2 block">Cuisines</Label>
-                <div className="relative">
-                  <Utensils className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="e.g., Italian, Asian (comma-separated)"
-                    onChange={(e) => setCuisines(e.target.value.split(',').map(c => c.trim()).filter(Boolean))}
-                    className="pl-9 h-12 rounded-xl bg-muted/50 border-border"
-                  />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[2rem] border border-dashed border-slate-200">
+                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                  <Utensils className="w-6 h-6 text-slate-300" />
                 </div>
-              </div>
-
-              <div className="lg:col-span-4 flex justify-between items-center pt-4 border-t border-border mt-2">
-                <Button variant="ghost" onClick={clearFilters} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl">
-                  <X className="w-4 h-4 mr-2" />
-                  Clear All
-                </Button>
-                <Button onClick={handleAdvancedFilter} disabled={isLoading} className="font-bold rounded-xl px-6 h-12 shadow-lg">
-                  Apply Filters
+                <h3 className="text-lg font-bold text-slate-900">No recipes found</h3>
+                <p className="text-slate-500 mb-6 text-sm">We couldn't find any recipes matching your criteria.</p>
+                <Button
+                  onClick={clearFilters}
+                  variant="outline"
+                  className="rounded-full border-slate-200 text-slate-600 hover:border-slate-300"
+                >
+                  Clear Search & Filters
                 </Button>
               </div>
-            </Card>
+            )}
           </motion.div>
         )}
-      </AnimatePresence>
+      </div>
 
-      {/* Search Results */}
-      {hasSearched ? (
-        <div>
-          <div className="flex items-center justify-between mb-6 px-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary" />
-              <h2 className="text-xl font-bold text-foreground">
-                {searchResults.length > 0 ? 'Search Results' : 'No Results Found'}
-              </h2>
-            </div>
-            <p className="text-muted-foreground text-sm font-medium bg-muted px-3 py-1 rounded-full">
-              {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
-            </p>
-          </div>
-
-          {searchResults.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {searchResults.map((recipe, index) => (
-                <motion.div
-                  key={recipe.pk}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <RecipeCard
-                    recipe={recipe}
-                    onBookmark={handleBookmark}
-                    onLike={handleLike}
-                  />
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-20 bg-muted/30 rounded-[3rem] border-2 border-dashed border-border">
-              <div className="w-20 h-20 bg-card rounded-full shadow-sm flex items-center justify-center mx-auto mb-6">
-                <Search className="w-10 h-10 text-muted-foreground/50" />
-              </div>
-              <h3 className="text-xl font-bold text-foreground mb-2">No recipes found</h3>
-              <p className="text-muted-foreground max-w-xs mx-auto mb-8">
-                Try adjusting your search terms or filters to find what you're looking for.
-              </p>
-              <Button
-                onClick={clearFilters}
-                className="rounded-xl px-8 h-12 font-bold shadow-lg"
-              >
-                Clear Search
-              </Button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="text-center py-24">
-          <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
-            <Search className="w-10 h-10 text-muted-foreground" />
-          </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Start your culinary journey</h2>
-          <p className="text-muted-foreground">Enter keywords above to find delicious recipes.</p>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

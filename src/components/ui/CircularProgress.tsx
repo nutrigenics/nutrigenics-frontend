@@ -6,6 +6,7 @@ interface CircularProgressProps {
     label?: string;
     showPercentage?: boolean;
     showTotal?: boolean; // New prop to show "Value / Max" format
+    showText?: boolean; // New prop to toggle built-in text
     children?: React.ReactNode; // New prop for center icon
 }
 
@@ -17,6 +18,7 @@ export function CircularProgress({
     label,
     showPercentage = true,
     showTotal = false,
+    showText = true,
     children
 }: CircularProgressProps) {
     const safeValue = isNaN(value) ? 0 : value;
@@ -63,21 +65,23 @@ export function CircularProgress({
 
                 {/* Center text */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    {children && <div className="mb-1">{children}</div>}
+                    {children && <div className="mb-0">{children}</div>}
 
-                    {showTotal ? (
-                        <div className="flex flex-col items-center leading-none">
-                            <span className={`font-bold text-foreground ${sizes[size].fontSize}`}>
-                                {Math.round(safeValue)}
+                    {showText && (
+                        showTotal ? (
+                            <div className="flex flex-col items-center leading-none">
+                                <span className={`font-bold text-foreground ${sizes[size].fontSize}`}>
+                                    {Math.round(safeValue)}
+                                </span>
+                                <span className="text-sm text-muted-foreground font-medium mt-0.5">
+                                    / {max}
+                                </span>
+                            </div>
+                        ) : (
+                            <span className={`font-bold text-foreground ${fontSize}`}>
+                                {showPercentage ? `${Math.round(percentage)}%` : Math.round(safeValue)}
                             </span>
-                            <span className="text-sm text-muted-foreground font-medium mt-0.5">
-                                / {max}
-                            </span>
-                        </div>
-                    ) : (
-                        <span className={`font-bold text-foreground ${fontSize}`}>
-                            {showPercentage ? `${Math.round(percentage)}%` : Math.round(safeValue)}
-                        </span>
+                        )
                     )}
                 </div>
             </div>

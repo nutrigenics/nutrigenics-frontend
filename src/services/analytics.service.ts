@@ -55,6 +55,11 @@ export interface DailyHistory {
     total_saturated_fat: number;
     total_unsaturated_fat: number;
     total_trans_fat: number;
+    total_iron: number;
+    total_calcium: number;
+    total_vitamin_d: number;
+    total_potassium: number;
+    weight?: number;
 }
 
 export interface AdvancedStats {
@@ -69,8 +74,15 @@ export interface AdvancedStats {
     week_change_pct: number;
 }
 
+export interface WeightHistory {
+    dates: string[];
+    weights: number[];
+    calories: number[];
+}
+
 export const analyticsService = {
-    async getPatientAnalytics(period: 'weekly' | 'monthly' | '60days' | 'all' = 'weekly'): Promise<NutrientStats> {
+    // ... previous methods ...
+    async getPatientAnalytics(period: 'weekly' | 'monthly' | '60days' | 'all' = 'weekly', patientId?: string): Promise<NutrientStats> {
         if (localStorage.getItem('is_guest_mode') === 'true') {
             const { MOCK_NUTRIENT_STATS } = await import('@/data/mockData');
 
@@ -93,13 +105,15 @@ export const analyticsService = {
                 limiting_nutrients: MOCK_NUTRIENT_STATS.limiting_nutrients.map(n => ({ ...n, data: sliceData(n.data) }))
             } as unknown as NutrientStats;
         }
-        const response = await apiClient.get('/api/analytics/patient/', {
-            params: { period }
-        });
+
+        const params: any = { period };
+        if (patientId) params.patient_id = patientId;
+
+        const response = await apiClient.get('/api/analytics/patient/', { params });
         return response.data;
     },
 
-    async getComplianceStats(): Promise<ComplianceStats> {
+    async getComplianceStats(patientId?: string): Promise<ComplianceStats> {
         if (localStorage.getItem('is_guest_mode') === 'true') {
             return {
                 compliance_rate: 85,
@@ -108,13 +122,14 @@ export const analyticsService = {
                 streak: 4
             };
         }
-        const response = await apiClient.get('/api/analytics/patient/', {
-            params: { period: 'compliance' }
-        });
+        const params: any = { period: 'compliance' };
+        if (patientId) params.patient_id = patientId;
+
+        const response = await apiClient.get('/api/analytics/patient/', { params });
         return response.data;
     },
 
-    async getMealDistribution(days: number = 7): Promise<MealDistribution> {
+    async getMealDistribution(days: number = 7, patientId?: string): Promise<MealDistribution> {
         if (localStorage.getItem('is_guest_mode') === 'true') {
             return {
                 distribution: [
@@ -126,24 +141,27 @@ export const analyticsService = {
                 total: 2000
             };
         }
-        const response = await apiClient.get('/api/analytics/patient/', {
-            params: { period: 'meal_distribution', days }
-        });
+        const params: any = { period: 'meal_distribution', days };
+        if (patientId) params.patient_id = patientId;
+
+        const response = await apiClient.get('/api/analytics/patient/', { params });
         return response.data;
     },
 
-    async getDailyHistory(days: number = 7): Promise<DailyHistory[]> {
+    async getDailyHistory(days: number = 7, patientId?: string): Promise<DailyHistory[]> {
         if (localStorage.getItem('is_guest_mode') === 'true') {
             const { MOCK_HISTORY } = await import('@/data/mockData');
             return MOCK_HISTORY.slice(-days) as unknown as DailyHistory[];
         }
-        const response = await apiClient.get('/api/analytics/patient/', {
-            params: { period: 'history', days }
-        });
+
+        const params: any = { period: 'history', days };
+        if (patientId) params.patient_id = patientId;
+
+        const response = await apiClient.get('/api/analytics/patient/', { params });
         return response.data;
     },
 
-    async getAdvancedStats(): Promise<AdvancedStats> {
+    async getAdvancedStats(patientId?: string): Promise<AdvancedStats> {
         if (localStorage.getItem('is_guest_mode') === 'true') {
             return {
                 bmr: 1600,
@@ -157,9 +175,32 @@ export const analyticsService = {
                 week_change_pct: 2.5
             };
         }
-        const response = await apiClient.get('/api/analytics/patient/', {
-            params: { period: 'advanced' }
-        });
+        const params: any = { period: 'advanced' };
+        if (patientId) params.patient_id = patientId;
+
+        const response = await apiClient.get('/api/analytics/patient/', { params });
+        return response.data;
+    },
+
+    async getWeightHistory(days: number = 30, patientId?: string): Promise<WeightHistory> {
+        if (localStorage.getItem('is_guest_mode') === 'true') {
+            // Basic mock
+            const count = days;
+            const dates = Array.from({ length: count }, (_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() - (count - 1 - i));
+                return d.toISOString().split('T')[0];
+            });
+            return {
+                dates,
+                weights: Array(count).fill(70).map((w, i) => w - (i * 0.05)),
+                calories: Array(count).fill(2000).map(c => c + (Math.random() * 400 - 200))
+            };
+        }
+        const params: any = { period: 'weight', days };
+        if (patientId) params.patient_id = patientId;
+
+        const response = await apiClient.get('/api/analytics/patient/', { params });
         return response.data;
     }
 };

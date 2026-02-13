@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Bell, Calendar, MessageSquare, CheckCheck, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bell, Calendar, MessagesSquare, CheckCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/context/NotificationContext';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function NotificationsPage() {
@@ -34,20 +35,17 @@ export default function NotificationsPage() {
             <div className="space-y-4">
                 <AnimatePresence>
                     {notifications.map((notification) => (
-                        <motion.div
+                        <Card
                             key={notification.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, height: 0 }}
                             className={cn(
-                                "relative overflow-hidden transition-all duration-300 rounded-2xl border cursor-pointer group",
+                                "relative overflow-hidden transition-all duration-300 cursor-pointer group hover:shadow-md",
                                 notification.read
                                     ? 'bg-card border-border shadow-sm'
                                     : 'bg-primary/5 border-primary/20 shadow-md'
                             )}
                             onClick={() => toggleExpand(notification.id)}
                         >
-                            <div className="p-5">
+                            <CardContent className="p-5">
                                 <div className="flex gap-4">
                                     <div className={cn(
                                         "p-3 rounded-xl flex-shrink-0 h-fit transition-colors",
@@ -55,7 +53,7 @@ export default function NotificationsPage() {
                                             ? 'bg-muted text-muted-foreground'
                                             : 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
                                     )}>
-                                        {notification.type === 'message' ? <MessageSquare className="w-5 h-5" /> :
+                                        {notification.type === 'message' ? <MessagesSquare className="w-5 h-5" /> :
                                             notification.type === 'reminder' ? <Calendar className="w-5 h-5" /> :
                                                 <Bell className="w-5 h-5" />}
                                     </div>
@@ -82,20 +80,19 @@ export default function NotificationsPage() {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </CardContent>
 
                             {/* Expand Indicator */}
                             <div className="absolute right-4 top-5 text-muted-foreground/30 group-hover:text-primary/50 transition-colors">
                                 {expandedId === notification.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </div>
-
-                        </motion.div>
+                        </Card>
                     ))}
                 </AnimatePresence>
             </div>
 
             {notifications.length === 0 && (
-                <div className="text-center py-20 bg-muted/30 rounded-3xl border border-dashed border-border mt-8">
+                <div className="text-center py-20 bg-muted/30 rounded-xl border border-dashed border-border mt-8">
                     <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                         <Bell className="w-8 h-8 text-muted-foreground/50" />
                     </div>

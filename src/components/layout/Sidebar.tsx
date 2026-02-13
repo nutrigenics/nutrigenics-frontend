@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     LayoutDashboard,
     Calendar,
@@ -11,9 +12,9 @@ import {
     Stethoscope,
     LogOut,
     ChevronLeft,
-    User,
-    UserCog,
-    MessageSquare,
+    Users,
+    CircleUserRound,
+    MessagesSquare,
     Settings,
     Building2,
     FileText,
@@ -46,20 +47,25 @@ const patientNavItems = [
 
 const dietitianNavItems = [
     { name: 'Dashboard', href: '/dietitian/dashboard', icon: LayoutDashboard },
-    { name: 'My Patients', href: '/dietitian/patients', icon: User },
-    { name: 'Messages', href: '/dietitian/chats', icon: MessageSquare },
-    { name: 'Profile', href: '/dietitian/profile', icon: UserCog },
+    { name: 'My Patients', href: '/dietitian/patients', icon: Users },
+    { name: 'Messages', href: '/dietitian/chats', icon: MessagesSquare },
+    { name: 'Profile', href: '/dietitian/profile', icon: CircleUserRound },
 ];
 
 const hospitalNavItems = [
     { name: 'Dashboard', href: '/hospital/dashboard', icon: LayoutDashboard },
+    { name: 'Dietitians', href: '/hospital/dietitians', icon: Users },
     { name: 'Requests', href: '/hospital/requests', icon: FileText },
     { name: 'Profile', href: '/hospital/profile', icon: Building2 },
 ];
 
-const commonNavItems = [
-    { name: 'Settings', href: '/settings', icon: Settings },
-];
+const getCommonNavItems = (role?: string) => {
+    if (role === 'patient') {
+        return [{ name: 'Settings', href: '/settings', icon: Settings }];
+    }
+
+    return [];
+};
 
 export function Sidebar({ isMobileOpen, onMobileClose, pendingRequestsCount = 0 }: SidebarProps) {
     const location = useLocation();
@@ -83,7 +89,7 @@ export function Sidebar({ isMobileOpen, onMobileClose, pendingRequestsCount = 0 
     };
 
     const mainNavItems = getNavItems();
-    const allNavItems = [...mainNavItems, ...commonNavItems];
+    const allNavItems = [...mainNavItems, ...getCommonNavItems(user?.role)];
 
     const handleLogout = async () => {
         try {
@@ -96,14 +102,19 @@ export function Sidebar({ isMobileOpen, onMobileClose, pendingRequestsCount = 0 
         }
     };
 
+    // On mobile when sidebar is open, show expanded view with labels
+    const isExpanded = isMobileOpen;
+
     return (
         <TooltipProvider delayDuration={0}>
             <aside
                 className={cn(
-                    'sidebar h-full flex-shrink-0 z-50 lg:z-auto transition-transform duration-300 ease-in-out',
-                    'w-[80px] lg:w-[90px] bg-sidebar border-r border-sidebar-border',
-                    'lg:static fixed inset-y-0 left-0',
-                    isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+                    'sidebar h-full flex-shrink-0 z-50 xl:z-auto transition-all duration-300 ease-in-out',
+                    // On mobile/tablet: wider when open (with labels), on desktop: always icon-only
+                    isExpanded ? 'w-[240px]' : 'w-[80px] xl:w-[90px]',
+                    'bg-white/95 backdrop-blur-sm border-r border-border',
+                    'xl:static fixed inset-y-0 left-0',
+                    isMobileOpen ? 'translate-x-0' : '-translate-x-full xl:translate-x-0'
                 )}
             >
                 <nav className="w-full h-full py-6 flex flex-col items-center justify-between">
@@ -111,61 +122,110 @@ export function Sidebar({ isMobileOpen, onMobileClose, pendingRequestsCount = 0 
                     {/* Top Section */}
                     <div className="flex flex-col items-center w-full gap-8">
                         {/* Logo */}
-                        <div className="relative group">
+                        <div className={cn("relative", isExpanded ? "w-full px-4" : "")}>
                             <Link
                                 to="/"
-                                className="block transition-transform duration-300 hover:scale-105"
+                                className={cn(
+                                    "block transition-transform duration-300 hover:scale-105",
+                                    isExpanded ? "flex items-center gap-3" : ""
+                                )}
                             >
-                                <div className="p-2 rounded-xl bg-gradient-to-br from-sidebar-primary/20 to-transparent">
+                                <div className="p-2.5 rounded-2xl bg-gradient-to-br from-primary/15 via-emerald-500/10 to-transparent ring-1 ring-primary/10 shadow-sm">
                                     <img src={logo} alt="Nutrigenics" className="w-8 h-8 lg:w-9 lg:h-9" />
                                 </div>
+                                {isExpanded && (
+                                    <span className="font-bold text-lg text-foreground tracking-tight">Nutrigenics</span>
+                                )}
                             </Link>
 
                             {/* Close button (mobile only) */}
-                            <button
-                                onClick={onMobileClose}
-                                className="lg:hidden absolute -right-12 top-0 p-2 bg-background rounded-md shadow-md border border-border"
-                                aria-label="Close menu"
-                            >
-                                <ChevronLeft className="w-5 h-5 text-foreground" />
-                            </button>
+                            {isExpanded && (
+                                <button
+                                    onClick={onMobileClose}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                                    aria-label="Close menu"
+                                >
+                                    <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+                                </button>
+                            )}
                         </div>
 
                         {/* Navigation Items */}
-                        <div className="flex flex-col gap-3 w-full items-center px-2">
+                        <div className={cn("flex flex-col gap-1.5 w-full", isExpanded ? "px-3" : "items-center px-2")}>
                             {allNavItems.map((item) => {
                                 const Icon = item.icon;
-                                const isActive = location.pathname === item.href;
+                                // Handle dashboard alias '/dashboard' for patient route '/'
+                                const isActive = location.pathname === item.href || (item.href === '/' && location.pathname === '/dashboard');
+
+                                const linkContent = (
+                                    <Link
+                                        to={item.href}
+                                        className={cn(
+                                            'relative p-3 rounded-2xl transition-all duration-200 flex items-center group',
+                                            isExpanded ? 'gap-3 w-full' : 'justify-center',
+                                            // Text color depends on active state
+                                            isActive
+                                                ? 'text-white'
+                                                : 'text-muted-foreground hover:text-foreground hover:bg-gray-100/80'
+                                        )}
+                                        aria-label={item.name}
+                                        onClick={() => isMobileOpen && onMobileClose?.()}
+                                    >
+                                        {/* Liquid Motion Active Background */}
+                                        <AnimatePresence>
+                                            {isActive && (
+                                                <motion.div
+                                                    layoutId="sidebar-active-indicator"
+                                                    className="absolute inset-0 bg-gradient-to-b from-emerald-500 to-primary rounded-2xl shadow-lg shadow-primary/25"
+                                                    style={{
+                                                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), 0 4px 12px -2px rgba(16, 185, 129, 0.25)'
+                                                    }}
+                                                    initial={false}
+                                                    transition={{
+                                                        type: "spring",
+                                                        stiffness: 350,
+                                                        damping: 30
+                                                    }}
+                                                />
+                                            )}
+                                        </AnimatePresence>
+
+                                        {/* Icon */}
+                                        <Icon className={cn(
+                                            "relative z-10 w-5 h-5 lg:w-[22px] lg:h-[22px] transition-transform duration-200 flex-shrink-0",
+                                            !isActive && "group-hover:scale-110"
+                                        )} />
+
+                                        {/* Label (visible when expanded) */}
+                                        {isExpanded && (
+                                            <span className="relative z-10 font-medium text-sm">
+                                                {item.name}
+                                            </span>
+                                        )}
+
+                                        {/* Notification Badge */}
+                                        {item.href === '/my-dietitian' && pendingRequestsCount > 0 && (
+                                            <span className={cn(
+                                                "relative z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive text-xs font-bold text-destructive-foreground shadow-sm animate-pulse",
+                                                isExpanded ? "ml-auto" : "absolute -top-1 -right-1 h-4 w-4 border-2 border-white"
+                                            )}>
+                                                {pendingRequestsCount}
+                                            </span>
+                                        )}
+                                    </Link>
+                                );
+
+                                // Only show tooltip on desktop (when collapsed)
+                                if (isExpanded) {
+                                    return <div key={item.href}>{linkContent}</div>;
+                                }
 
                                 return (
                                     <Tooltip key={item.href}>
                                         <TooltipTrigger asChild>
-                                            <Link
-                                                to={item.href}
-                                                className={cn(
-                                                    'p-3 rounded-2xl transition-all duration-300 relative group flex items-center justify-center',
-                                                    'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                                                    isActive
-                                                        ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-lg shadow-sidebar-primary/20'
-                                                        : 'text-muted-foreground'
-                                                )}
-                                                aria-label={item.name}
-                                                onClick={() => isMobileOpen && onMobileClose?.()}
-                                            >
-                                                <Icon className={cn(
-                                                    "w-5 h-5 lg:w-6 lg:h-6 transition-transform duration-300",
-                                                    isActive ? "scale-105" : "group-hover:scale-110"
-                                                )} />
-
-                                                {/* Notification Badge */}
-                                                {item.href === '/my-dietitian' && pendingRequestsCount > 0 && (
-                                                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground shadow-sm animate-pulse border-2 border-sidebar">
-                                                        {pendingRequestsCount}
-                                                    </span>
-                                                )}
-                                            </Link>
+                                            {linkContent}
                                         </TooltipTrigger>
-                                        <TooltipContent side="right" sideOffset={16} className="bg-popover text-popover-foreground font-medium text-sm px-3 py-1.5 rounded-lg shadow-elevation border border-border/50">
+                                        <TooltipContent side="right" sideOffset={16} className="bg-gray-900 text-white font-medium text-sm px-3 py-1.5 rounded-lg shadow-lg border-0">
                                             {item.name}
                                         </TooltipContent>
                                     </Tooltip>
@@ -175,24 +235,35 @@ export function Sidebar({ isMobileOpen, onMobileClose, pendingRequestsCount = 0 
                     </div>
 
                     {/* Bottom Section: Logout */}
-                    <div className="pb-4 w-full flex justify-center">
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <button
-                                    onClick={handleLogout}
-                                    className="p-3 rounded-2xl transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive text-muted-foreground/70"
-                                    aria-label="Log out"
-                                >
-                                    <LogOut className="w-5 h-5 lg:w-6 lg:h-6" />
-                                </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right" sideOffset={16} className="bg-destructive text-destructive-foreground font-medium px-3 py-1.5 rounded-lg shadow-md border-0">
-                                Log out
-                            </TooltipContent>
-                        </Tooltip>
+                    <div className={cn("pb-4 w-full", isExpanded ? "px-3" : "flex justify-center")}>
+                        {isExpanded ? (
+                            <button
+                                onClick={handleLogout}
+                                className="p-3 rounded-2xl transition-colors duration-200 hover:bg-rose-50 hover:text-rose-600 text-muted-foreground w-full flex items-center gap-3"
+                                aria-label="Log out"
+                            >
+                                <LogOut className="w-5 h-5 lg:w-6 lg:h-6 flex-shrink-0" />
+                                <span className="font-medium text-sm">Log out</span>
+                            </button>
+                        ) : (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={handleLogout}
+                                        className="p-3 rounded-2xl transition-colors duration-200 hover:bg-rose-50 hover:text-rose-600 text-muted-foreground"
+                                        aria-label="Log out"
+                                    >
+                                        <LogOut className="w-5 h-5 lg:w-6 lg:h-6" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" sideOffset={16} className="bg-rose-600 text-white font-medium px-3 py-1.5 rounded-lg shadow-lg border-0">
+                                    Log out
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
                     </div>
                 </nav>
             </aside>
-        </TooltipProvider>
+        </TooltipProvider >
     );
 }

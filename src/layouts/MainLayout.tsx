@@ -16,7 +16,7 @@ export function MainLayout({ children, pendingRequestsCount = 0, fullHeight = fa
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     return (
-        <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
+        <div className="flex h-[100dvh] w-full bg-background text-foreground overflow-hidden">
             {/* Sidebar */}
             <Sidebar
                 isMobileOpen={isMobileSidebarOpen}
@@ -30,19 +30,17 @@ export function MainLayout({ children, pendingRequestsCount = 0, fullHeight = fa
                 <Header onMobileMenuToggle={() => setIsMobileSidebarOpen(true)} />
 
                 {/* Page Content */}
-                <main className={`flex-1 ${fullHeight ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
-                    <div className={`max-w-[1600px] w-full mx-auto ${fullHeight ? 'h-full flex flex-col' : 'px-6 lg:px-8 py-8 min-h-[calc(100vh-8rem)]'}`}>
+                <main className={`flex-1 flex flex-col min-h-0 ${fullHeight ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+                    <div className={fullHeight ? 'flex-1 flex flex-col min-h-0' : 'max-w-[1600px] w-full mx-auto px-6 lg:px-8 py-8 min-h-[calc(100vh-8rem)]'}>
                         {children || <Outlet />}
                     </div>
-
-
                 </main>
             </div>
 
             {/* Mobile Overlay */}
             {isMobileSidebarOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+                    className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden"
                     onClick={() => setIsMobileSidebarOpen(false)}
                 />
             )}

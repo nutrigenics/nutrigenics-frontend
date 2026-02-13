@@ -1,18 +1,35 @@
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, User, TrendingUp, MessageSquare, Activity, Calendar, Loader2, Clock, UserPlus } from 'lucide-react';
+import { Search, Clock, UserPlus, Loader2, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { dietitianDashboardService } from '@/services/dietitian-dashboard.service';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import type { Patient } from '@/types';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"; // Ensure these are imported or available
 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import apiClient from '@/services/api.client';
+import { SendNotificationDialog } from '@/components/dietitian/SendNotificationDialog';
+import { PatientChatDialog } from '@/components/chat/PatientChatDialog';
 
 interface PendingRequest {
   id: number;
@@ -28,10 +45,12 @@ interface PendingRequest {
 }
 
 export default function DietitianPatientsPage() {
+  const navigate = useNavigate();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [genderFilter, setGenderFilter] = useState<string>('all');
 
   // Request Patient Modal State
   const [isRequestOpen, setIsRequestOpen] = useState(false);
@@ -40,6 +59,14 @@ export default function DietitianPatientsPage() {
     patient_id: '',
     message: ''
   });
+
+  // Notification Modal State - Keeping strictly for redundancy if needed, but actions are removed from table
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [selectedPatientNotify, _setSelectedPatientNotify] = useState<{ id: number, name: string } | null>(null);
+
+  // Chat Modal State - Keeping strictly for redundancy
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [selectedChatPatient, _setSelectedChatPatient] = useState<any>(null);
 
   useEffect(() => {
     fetchData();
@@ -93,15 +120,23 @@ export default function DietitianPatientsPage() {
     }
   };
 
-  const getRandomColor = (id: number) => {
-    const colors = [
-      "bg-blue-100 text-blue-600 border-blue-200",
-      "bg-purple-100 text-purple-600 border-purple-200",
-      "bg-orange-100 text-orange-600 border-orange-200",
-      "bg-emerald-100 text-emerald-600 border-emerald-200"
-    ];
-    return colors[id % colors.length];
+  const calculateAge = (dobString?: string) => {
+    if (!dobString) return 'N/A';
+    const dob = new Date(dobString);
+    const diff_ms = Date.now() - dob.getTime();
+    const age_dt = new Date(diff_ms);
+    return Math.abs(age_dt.getUTCFullYear() - 1970);
   };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const filteredPatients = patients.filter(patient => {
+    if (genderFilter === 'all') return true;
+    return patient.gender?.toLowerCase() === genderFilter.toLowerCase();
+  });
 
   if (isLoading) {
     return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-8 h-8 text-primary" /></div>;
@@ -109,66 +144,16 @@ export default function DietitianPatientsPage() {
 
   return (
     <>
-      {/* Hero Header */}
-      <div className="mb-8 p-8 md:p-10 bg-white rounded-[2.5rem] relative overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.05)] border border-gray-100">
-        <div className="relative z-10 flex flex-col md:flex-row items-end justify-between gap-6">
-          <div>
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-2 mb-4"
-            >
-              <div className="p-1.5 bg-gray-100 rounded-lg">
-                <User className="w-5 h-5 text-gray-900" />
-              </div>
-              <span className="text-gray-500 text-xs font-bold uppercase tracking-wide">Management</span>
-            </motion.div>
-
-            <motion.h1
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="text-4xl md:text-5xl font-bold text-gray-900 mb-2 tracking-tight"
-            >
-              My <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600">Patients</span>
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-lg text-gray-500 max-w-lg"
-            >
-              Monitor progress, update plans, and stay connected.
-            </motion.p>
-          </div>
-          <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-              className="relative group w-full md:w-auto"
-            >
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-logo transition-colors" />
-              <Input
-                type="text"
-                placeholder="Search patients..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-12 h-14 w-full md:w-80 bg-gray-50 border-gray-200 focus:border-logo/50 focus:ring-4 focus:ring-logo/10 rounded-2xl shadow-inner text-base"
-              />
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Button onClick={() => setIsRequestOpen(true)} className="h-14 px-8 rounded-2xl bg-gray-900 text-white font-bold shadow-lg hover:bg-gray-800 w-full md:w-auto">
-                <UserPlus className="w-5 h-5 mr-2" />
-                Add Patient
-              </Button>
-            </motion.div>
-          </div>
-        </div>
+      {/* Simplified Page Header */}
+      <div className="mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">My Patients</h1>
+          <p className="text-slate-500">Manage your patient list and connection requests.</p>
+        </motion.div>
       </div>
 
       {/* Pending Requests Section */}
@@ -178,23 +163,22 @@ export default function DietitianPatientsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <div className="mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Pending Requests</h2>
-            <p className="text-gray-500">Waiting for patient approval</p>
+          <div className="mb-4 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            <h2 className="text-sm font-bold text-orange-700 uppercase tracking-wider">Pending Requests</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {pendingRequests.map((req) => (
-              <Card key={req.id} className="p-5 rounded-2xl border-orange-100 bg-orange-50/30">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-orange-100 border border-orange-200 flex items-center justify-center text-orange-600">
-                    <Clock className="w-6 h-6" />
+              <Card key={req.id} className="p-6 rounded-2xl border-orange-100 bg-orange-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                    <Clock className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-gray-900 truncate">
+                    <h3 className="font-bold text-gray-900 truncate text-sm">
                       {req.patient_details?.fname || 'Patient'} {req.patient_details?.lname || ''}
                     </h3>
-                    <p className="text-sm text-gray-500 truncate">{req.patient_details?.email || 'Awaiting response'}</p>
-                    <p className="text-xs text-orange-600 mt-1">Pending since {new Date(req.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-500 truncate">{req.patient_details?.email}</p>
                   </div>
                 </div>
               </Card>
@@ -203,77 +187,106 @@ export default function DietitianPatientsPage() {
         </motion.div>
       )}
 
-      {/* Connected Patients List */}
-      <div className="mb-4">
-        <h2 className="text-xl font-bold text-gray-900">Connected Patients</h2>
-        <p className="text-gray-500">Patients who have accepted your request</p>
+      {/* Table Toolbar */}
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-6">
+        <div className="flex flex-1 w-full gap-3">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <Input
+              placeholder="Search by name or email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-12 bg-white border-slate-200 rounded-xl focus:ring-emerald-500/20"
+            />
+          </div>
+          <Select value={genderFilter} onValueChange={setGenderFilter}>
+            <SelectTrigger className="w-[140px] h-12 bg-white border-slate-200 rounded-xl">
+              <div className="flex items-center gap-2 text-slate-600">
+                <Filter className="w-3.5 h-3.5" />
+                <SelectValue placeholder="Gender" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Genders</SelectItem>
+              <SelectItem value="male">Male</SelectItem>
+              <SelectItem value="female">Female</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Button onClick={() => setIsRequestOpen(true)} className="w-full md:w-auto h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/10">
+          <UserPlus className="w-4 h-4 mr-2" /> Add Patient
+        </Button>
       </div>
-      <div className="grid grid-cols-1 gap-4">
-        {patients.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground bg-gray-50 rounded-2xl border-dashed border-2">
-            No connected patients yet.
-            <Button variant="link" onClick={() => setIsRequestOpen(true)} className="mt-2 text-primary font-bold">
+
+      <div className="bg-white rounded-xl border border-slate-300 shadow-soft overflow-hidden">
+
+
+
+        {filteredPatients.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-slate-500 font-medium">No connected patients found.</p>
+            <Button variant="link" onClick={() => setIsRequestOpen(true)} className="mt-2 text-emerald-600 font-bold hover:text-emerald-700">
               Send a connection request
             </Button>
           </div>
         ) : (
-          patients.map((patient, index) => (
-            <motion.div
-              key={patient.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 + (index * 0.1) }}
-            >
-              <Card className="p-6 md:p-8 rounded-[2rem] border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
-                <div className="flex flex-col md:flex-row items-center gap-6">
-                  {/* Avatar */}
-                  <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center text-2xl font-black border-4 bg-white ${getRandomColor(patient.id)}`}>
-                    {patient.fname?.[0] || '?'}{patient.lname?.[0] || ''}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 text-center md:text-left space-y-2">
-                    <h3 className="text-xl font-bold text-gray-900">{patient.fname} {patient.lname}</h3>
-                    <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <User className="w-4 h-4" /> {patient.patient_id || 'N/A'}
-                      </span>
-                      {patient.place && (
-                        <span className="flex items-center gap-1">
-                          <Activity className="w-4 h-4" /> {patient.place}
-                        </span>
-                      )}
+          <Table>
+            <TableHeader className='h-16 border-b border-slate-100 bg-slate-50/50'>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[300px] pl-6">Patient</TableHead>
+                <TableHead>Patient ID</TableHead>
+                <TableHead>Age</TableHead>
+                <TableHead>Gender</TableHead>
+                <TableHead>Joined</TableHead>
+                <TableHead className="text-right pr-6">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredPatients.map((patient) => (
+                <TableRow
+                  key={patient.id}
+                  className="hover:bg-slate-50/80 cursor-pointer transition-colors h-8"
+                  onClick={() => navigate(`/dietitian/patients/${patient.id}`)}
+                >
+                  <TableCell className="pl-6 py-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center text-emerald-700 font-bold text-sm">
+                        {patient.fname?.[0]}{patient.lname?.[0]}
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900">{patient.fname} {patient.lname}</div>
+                        <div className="text-xs text-slate-500">{patient.email}</div>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-wrap justify-center gap-3 w-full md:w-auto">
-                    <Link to={`/dietitian/patients/${patient.id}/analytics`}>
-                      <Button variant="outline" className="h-12 px-5 rounded-xl border-gray-200 hover:bg-gray-50 font-semibold text-gray-700">
-                        <TrendingUp className="w-4 h-4 mr-2" /> Analytics
-                      </Button>
-                    </Link>
-                    <Link to={`/dietitian/patients/${patient.id}/chat`}>
-                      <Button variant="outline" className="h-12 px-5 rounded-xl border-gray-200 hover:bg-gray-50 font-semibold text-gray-700">
-                        <MessageSquare className="w-4 h-4 mr-2" /> Chat
-                      </Button>
-                    </Link>
-                    <Link to={`/dietitian/patients/${patient.id}/plan`}>
-                      <Button className="h-12 px-6 rounded-xl bg-gray-900 text-white font-semibold shadow-lg hover:bg-gray-800">
-                        <Calendar className="w-4 h-4 mr-2" /> Plan
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-          ))
+                  </TableCell>
+                  <TableCell className="font-mono text-slate-600 font-medium">
+                    {patient.patient_id}
+                  </TableCell>
+                  <TableCell className="text-slate-600">
+                    {calculateAge(patient.date_of_birth)}
+                  </TableCell>
+                  <TableCell className="text-slate-600 capitalize">
+                    {patient.gender || '-'}
+                  </TableCell>
+                  <TableCell className="text-slate-600">
+                    {formatDate(patient.consent_date)}
+                  </TableCell>
+                  <TableCell className="text-right pr-6">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                      Active
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </div>
 
       {/* Request Patient Dialog */}
       <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
-        <DialogContent className="sm:max-w-md rounded-3xl p-8">
+        <DialogContent className="sm:max-w-md rounded-xl p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-center">Add Patient by ID</DialogTitle>
             <DialogDescription className="text-center">
@@ -305,14 +318,27 @@ export default function DietitianPatientsPage() {
               />
             </div>
             <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsRequestOpen(false)} className="rounded-xl h-12 px-6">Cancel</Button>
-              <Button type="submit" disabled={isRequesting} className="rounded-xl h-12 px-8 bg-gray-900 text-white font-bold">
+              <Button type="button" variant="outline" onClick={() => setIsRequestOpen(false)} className="rounded-xl h-12 px-6 border-slate-200 text-slate-700 hover:bg-slate-50">Cancel</Button>
+              <Button type="submit" disabled={isRequesting} className="rounded-xl h-12 px-8 bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-600/20">
                 {isRequesting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Request'}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      <SendNotificationDialog
+        open={isNotificationOpen}
+        onOpenChange={setIsNotificationOpen}
+        patientId={selectedPatientNotify?.id || null}
+        patientName={selectedPatientNotify?.name}
+      />
+
+      <PatientChatDialog
+        open={isChatOpen}
+        onOpenChange={setIsChatOpen}
+        patient={selectedChatPatient}
+      />
     </>
   );
 }

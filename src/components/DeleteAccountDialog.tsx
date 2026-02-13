@@ -41,7 +41,7 @@ export function DeleteAccountDialog({
             // Reset state
             setPassword('');
             setConfirmText('');
-        } catch (error) {
+        } catch {
             // Error handling is done in parent
         } finally {
             setIsDeleting(false);

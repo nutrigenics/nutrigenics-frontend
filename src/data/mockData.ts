@@ -214,7 +214,10 @@ export const MOCK_MEAL_PLAN: MealPlan[] = [
 const getPastDate = (daysAgo: number) => {
     const d = new Date();
     d.setDate(d.getDate() - daysAgo);
-    return d.toISOString().split('T')[0];
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 };
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -237,10 +240,11 @@ export const MOCK_HISTORY = Array.from({ length: 180 }).map((_, i) => { // Incre
     let scenario = scenarios[0]; // Default Balanced
     const isWeekend = dayName === 'Saturday' || dayName === 'Sunday';
 
-    if (isWeekend && Math.random() > 0.5) scenario = scenarios[2]; // 50% chance of cheat day on weekend
-    else if (Math.random() > 0.8) scenario = scenarios[4]; // Occasional Active day
-    else if (Math.random() > 0.8) scenario = scenarios[1]; // Occasional High Protein
-    else if (Math.random() > 0.9) scenario = scenarios[3]; // Rare Low Calorie
+    const scenarioRoll = Math.random();
+    if (isWeekend && scenarioRoll > 0.5) scenario = scenarios[2]; // 50% chance of cheat day on weekend
+    else if (scenarioRoll > 0.9) scenario = scenarios[3]; // Rare Low Calorie
+    else if (scenarioRoll > 0.78) scenario = scenarios[1]; // Occasional High Protein
+    else if (scenarioRoll > 0.62) scenario = scenarios[4]; // Occasional Active day
 
     // Vary stats slightly for realism from the scenario base
     const vary = (base: number) => Math.round(base + (Math.random() * (base * 0.15) - (base * 0.07)));

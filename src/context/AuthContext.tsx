@@ -10,7 +10,7 @@ interface AuthContextType {
     isLoading: boolean;
     isOnboarded: boolean;
     login: (email: string, password: string) => Promise<boolean>;
-    guestLogin: () => Promise<boolean>;
+    guestLogin: (role?: 'patient' | 'dietitian' | 'hospital') => Promise<boolean>;
     signup: (email: string, password: string, role: 'patient' | 'dietitian' | 'hospital') => Promise<void>;
     logout: () => Promise<void>;
     updateProfile: (data: Partial<Patient | Dietitian | Hospital>) => Promise<void>;
@@ -141,10 +141,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const guestLogin = async (): Promise<boolean> => {
+    const guestLogin = async (role: 'patient' | 'dietitian' | 'hospital' = 'patient'): Promise<boolean> => {
         try {
             // authService.guestLogin stores tokens in localStorage
-            await authService.guestLogin();
+            await authService.guestLogin(role);
 
             // Fetch profile after successful login and return onboarding status
             const isOnboarded = await checkAuthStatus();

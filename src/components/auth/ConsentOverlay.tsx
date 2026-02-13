@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 
 export const ConsentOverlay = () => {
-    const { profile, acceptConsent } = useAuth();
+    const { user, profile, acceptConsent } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Only show for patients who haven't accepted consent
+    if (!user || user.role !== 'patient') return null;
     if (!profile || (profile as any).consent_accepted) return null;
 
     const handleAccept = async () => {

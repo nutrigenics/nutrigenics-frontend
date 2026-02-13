@@ -27,8 +27,25 @@ export const authService = {
      * Guest login - auto-login with backend guest account
      * FOR DEVELOPMENT/TESTING ONLY - Disabled in production
      */
-    async guestLogin() {
-        const response = await apiClient.post('/api/v1/auth/guest-login/');
+    /**
+     * Guest login - auto-login with backend guest account
+     * role defaults to 'patient'
+     */
+    async guestLogin(role: 'patient' | 'dietitian' | 'hospital' = 'patient') {
+        // We use the specific guest emails setup by the backend script
+        let email = 'guest@nutrigenics.care';
+
+        if (role === 'dietitian') {
+            email = 'dietitian@nutrigenics.care';
+        } else if (role === 'hospital') {
+            email = 'hospital@nutrigenics.care';
+        }
+
+        // We use the standard login endpoint with guest credentials
+        const response = await apiClient.post('/api/v1/auth/token/', {
+            email: email,
+            password: 'guest123'
+        });
 
         // Store tokens
         if (response.data.access) {
@@ -38,7 +55,7 @@ export const authService = {
             localStorage.setItem('refresh_token', response.data.refresh);
         }
 
-        // Set guest mode flag for mock data
+        // Set guest mode flag for any frontend mocks if needed (though we are using real backend user now)
         localStorage.setItem('is_guest_mode', 'true');
 
         return response.data;
@@ -68,10 +85,13 @@ export const authService = {
     /**
      * Update user profile
      */
-    async updateProfile(data: Partial<BaseUser>) {
+    async updateProfile(data: Partial<BaseUser> | FormData) {
         if (localStorage.getItem('is_guest_mode') === 'true') {
-            return { user: { ...data, id: 999 } }; // Mock update
+            return { user: { id: 999 } }; // Mock update
         }
+
+        // If data is FormData, let axios handle the headers (multipart/form-data)
+        // Otherwise it sends JSON
         const response = await apiClient.put('/api/v1/auth/profile/', data);
         return response.data;
     },

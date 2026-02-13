@@ -1,6 +1,6 @@
 import { MainLayout } from '@/layouts/MainLayout';
 import { motion } from 'framer-motion';
-import { Mail, Phone, MapPin, Send, MessageSquare } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, MessagesSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,7 @@ export default function ContactPage() {
             animate={{ opacity: 1, y: 0 }}
             className="inline-flex items-center justify-center p-3 bg-blue-50 rounded-2xl mb-6 text-blue-600"
           >
-            <MessageSquare className="w-6 h-6" />
+            <MessagesSquare className="w-6 h-6" />
           </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 10 }}

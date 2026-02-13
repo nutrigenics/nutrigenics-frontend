@@ -21,7 +21,9 @@ import {
     CheckCircle,
     Building2,
     Stethoscope,
-    Target
+    Target,
+    Mars,
+    Venus
 } from 'lucide-react';
 import apiClient from '@/services/api.client';
 import { authService } from '@/services/auth.service';
@@ -338,7 +340,7 @@ export default function OnboardingPage() {
         }
     };
 
-    const inputClasses = "h-14 bg-white/50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-logo focus:ring-4 focus:ring-logo/10 transition-all rounded-xl text-lg font-medium";
+    const inputClasses = "h-14 bg-white/50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all rounded-xl text-lg font-medium";
 
     const SelectableChip = ({ name, selected, onToggle }: { name: string; selected: boolean; onToggle: () => void }) => (
         <button
@@ -382,14 +384,14 @@ export default function OnboardingPage() {
             className={`
                 flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border transition-all duration-200 relative
                 ${gender === genderValue
-                    ? 'bg-white border-logo ring-2 ring-logo/20 shadow-lg'
+                    ? 'bg-white border-primary ring-2 ring-logo/20 shadow-lg'
                     : 'bg-white/50 border-gray-200 hover:border-gray-300 hover:bg-white'}
             `}
         >
             {icon}
             <span className="font-medium text-gray-900">{label}</span>
             {gender === genderValue && (
-                <div className="absolute top-4 right-4 text-logo">
+                <div className="absolute top-4 right-4 text-primary">
                     <CheckCircle className="w-5 h-5" />
                 </div>
             )}
@@ -399,7 +401,7 @@ export default function OnboardingPage() {
     if (loadingReferenceData) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <Loader2 className="w-12 h-12 animate-spin text-logo" />
+                <Loader2 className="w-12 h-12 animate-spin text-primary" />
             </div>
         );
     }
@@ -424,7 +426,7 @@ export default function OnboardingPage() {
                                     <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                                         Step {currentStep + 1} of {steps.length}
                                     </span>
-                                    <span className="text-xs font-semibold text-logo">
+                                    <span className="text-xs font-semibold text-primary">
                                         {Math.round(((currentStep + 1) / steps.length) * 100)}%
                                     </span>
                                 </div>
@@ -597,8 +599,8 @@ export default function OnboardingPage() {
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-3">Gender</label>
                                                         <div className="flex gap-4 relative">
-                                                            <GenderButton genderValue="M" icon={<span className="text-2xl">♂️</span>} label="Male" />
-                                                            <GenderButton genderValue="F" icon={<span className="text-2xl">♀️</span>} label="Female" />
+                                                            <GenderButton genderValue="M" icon={<Mars className="w-6 h-6 text-sky-600" />} label="Male" />
+                                                            <GenderButton genderValue="F" icon={<Venus className="w-6 h-6 text-rose-600" />} label="Female" />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -706,7 +708,7 @@ export default function OnboardingPage() {
                                                             {consentAccepted && <Check className="w-3.5 h-3.5 text-white" />}
                                                         </div>
                                                         <div className="text-sm text-gray-600 leading-relaxed" onClick={() => setConsentAccepted(!consentAccepted)}>
-                                                            I agree to the <a href="/terms" className="text-gray-900 font-medium hover:text-logo link-underline">Terms of Service</a> and{' '}<a href="/privacy" className="text-gray-900 font-medium hover:text-logo link-underline">Privacy Policy</a>.
+                                                            I agree to the <a href="/terms" className="text-gray-900 font-medium hover:text-primary link-underline">Terms of Service</a> and{' '}<a href="/privacy" className="text-gray-900 font-medium hover:text-primary link-underline">Privacy Policy</a>.
                                                         </div>
                                                     </label>
                                                 </div>
@@ -734,7 +736,7 @@ export default function OnboardingPage() {
                                     ) : currentStep === steps.length - 1 ? (
                                         <span className="flex items-center gap-2">
                                             Complete Setup
-                                            <Sparkles className="w-5 h-5 text-logo" />
+                                            <Sparkles className="w-5 h-5 text-primary" />
                                         </span>
                                     ) : (
                                         <span className="flex items-center gap-2">

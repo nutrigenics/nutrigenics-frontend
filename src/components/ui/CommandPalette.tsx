@@ -6,10 +6,14 @@ import {
     User,
     LayoutDashboard,
     Utensils,
-    MessageSquare,
+    MessagesSquare,
     Search,
-    BookOpen
+    BookOpen,
+    Users,
+    Building2,
+    FileText
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 import {
     CommandDialog,
@@ -25,6 +29,7 @@ import {
 export function CommandPalette() {
     const [open, setOpen] = useState(false);
     const navigate = useNavigate();
+    const { user } = useAuth();
 
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
@@ -43,49 +48,75 @@ export function CommandPalette() {
         command();
     };
 
+    if (!user) return null;
+
+    const patientCommands = {
+        navigation: [
+            { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+            { label: "Daily Plan", icon: Calendar, path: "/plan" },
+            { label: "Recipes", icon: Utensils, path: "/recipes" },
+            { label: "AI Assistant", icon: MessagesSquare, path: "/chat" },
+            { label: "Search", icon: Search, path: "/search" },
+        ],
+        settings: [
+            { label: "Profile", icon: User, path: "/profile", shortcut: "⌘P" },
+            { label: "Settings", icon: Settings, path: "/settings", shortcut: "⌘S" },
+            { label: "Bookmarks", icon: BookOpen, path: "/bookmarks" },
+        ],
+    };
+
+    const dietitianCommands = {
+        navigation: [
+            { label: "Dashboard", icon: LayoutDashboard, path: "/dietitian/dashboard" },
+            { label: "My Patients", icon: Users, path: "/dietitian/patients" },
+            { label: "Messages", icon: MessagesSquare, path: "/dietitian/chats" },
+        ],
+        settings: [
+            { label: "Profile", icon: User, path: "/dietitian/profile", shortcut: "⌘P" },
+        ],
+    };
+
+    const hospitalCommands = {
+        navigation: [
+            { label: "Dashboard", icon: LayoutDashboard, path: "/hospital/dashboard" },
+            { label: "Dietitians", icon: Users, path: "/hospital/dietitians" },
+            { label: "Requests", icon: FileText, path: "/hospital/requests" },
+        ],
+        settings: [
+            { label: "Profile", icon: Building2, path: "/hospital/profile", shortcut: "⌘P" },
+        ],
+    };
+
+    const commandMap = {
+        patient: patientCommands,
+        dietitian: dietitianCommands,
+        hospital: hospitalCommands,
+    };
+
+    const commands = commandMap[user.role as keyof typeof commandMap] || patientCommands;
+
     return (
         <CommandDialog open={open} onOpenChange={setOpen}>
             <CommandInput placeholder="Type a command or search..." />
             <CommandList>
                 <CommandEmpty>No results found.</CommandEmpty>
                 <CommandGroup heading="Navigation">
-                    <CommandItem onSelect={() => runCommand(() => navigate("/"))}>
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                        <span>Dashboard</span>
-                    </CommandItem>
-                    <CommandItem onSelect={() => runCommand(() => navigate("/plan"))}>
-                        <Calendar className="mr-2 h-4 w-4" />
-                        <span>Daily Plan</span>
-                    </CommandItem>
-                    <CommandItem onSelect={() => runCommand(() => navigate("/recipes"))}>
-                        <Utensils className="mr-2 h-4 w-4" />
-                        <span>Recipes</span>
-                    </CommandItem>
-                    <CommandItem onSelect={() => runCommand(() => navigate("/chat"))}>
-                        <MessageSquare className="mr-2 h-4 w-4" />
-                        <span>AI Assistant</span>
-                    </CommandItem>
-                    <CommandItem onSelect={() => runCommand(() => navigate("/search"))}>
-                        <Search className="mr-2 h-4 w-4" />
-                        <span>Search</span>
-                    </CommandItem>
+                    {commands.navigation.map((item) => (
+                        <CommandItem key={item.path} onSelect={() => runCommand(() => navigate(item.path))}>
+                            <item.icon className="mr-2 h-4 w-4" />
+                            <span>{item.label}</span>
+                        </CommandItem>
+                    ))}
                 </CommandGroup>
                 <CommandSeparator />
                 <CommandGroup heading="Settings">
-                    <CommandItem onSelect={() => runCommand(() => navigate("/profile"))}>
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Profile</span>
-                        <CommandShortcut>⌘P</CommandShortcut>
-                    </CommandItem>
-                    <CommandItem onSelect={() => runCommand(() => navigate("/settings"))}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        <span>Settings</span>
-                        <CommandShortcut>⌘S</CommandShortcut>
-                    </CommandItem>
-                    <CommandItem onSelect={() => runCommand(() => navigate("/bookmarks"))}>
-                        <BookOpen className="mr-2 h-4 w-4" />
-                        <span>Bookmarks</span>
-                    </CommandItem>
+                    {commands.settings.map((item) => (
+                        <CommandItem key={item.path} onSelect={() => runCommand(() => navigate(item.path))}>
+                            <item.icon className="mr-2 h-4 w-4" />
+                            <span>{item.label}</span>
+                            {item.shortcut && <CommandShortcut>{item.shortcut}</CommandShortcut>}
+                        </CommandItem>
+                    ))}
                 </CommandGroup>
             </CommandList>
         </CommandDialog>

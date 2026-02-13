@@ -24,11 +24,13 @@ import {
   Check,
   Hash,
 } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '@/services/auth.service';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { DeleteAccountDialog } from '@/components/DeleteAccountDialog';
+import { WeightLogDialog } from '@/components/profile/WeightLogDialog';
 
 interface RefOption {
   id: number;
@@ -42,6 +44,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showWeightLog, setShowWeightLog] = useState(false);
 
   const [refData, setRefData] = useState<{
     allergies: RefOption[];
@@ -64,6 +67,8 @@ export default function ProfilePage() {
     cuisine_preference: [] as number[],
     diet_preference: [] as number[],
   });
+  const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchRefs = async () => {
@@ -88,9 +93,9 @@ export default function ProfilePage() {
         fname: p.fname || '',
         lname: p.lname || '',
         email: p.email || '',
-        phone: p.phone || '',
+        phone: p.phone_number || p.phone || '',
         address: p.address || p.place || '',
-        dob: p.dob || p.date_of_birth || '',
+        dob: p.date_of_birth || p.dob || '',
         gender: p.gender || '',
         height: p.height || '',
         weight: p.weight || '',
@@ -109,6 +114,9 @@ export default function ProfilePage() {
             ? p.dietary_preferences.map((d: any) => typeof d === 'object' ? d.id : Number(d))
             : [],
       });
+      if (p.image) {
+        setPreviewImage(p.image);
+      }
     }
   }, [profile]);
 
@@ -117,6 +125,14 @@ export default function ProfilePage() {
       ...formData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setProfileImage(file);
+      setPreviewImage(URL.createObjectURL(file));
+    }
   };
 
   const toggleSelection = (field: 'allergies' | 'cuisine_preference' | 'diet_preference', id: number) => {
@@ -133,7 +149,25 @@ export default function ProfilePage() {
     e?.preventDefault();
     try {
       setIsSaving(true);
-      await authService.updateProfile(formData);
+
+      const data = new FormData();
+      data.append('fname', formData.fname);
+      data.append('lname', formData.lname);
+      if (formData.phone) data.append('phone_number', formData.phone);
+      if (formData.address) data.append('place', formData.address); // Backend expects 'place' for patients
+      if (formData.dob) data.append('date_of_birth', formData.dob);
+      if (formData.gender) data.append('gender', formData.gender);
+      if (formData.height) data.append('height', formData.height);
+      if (formData.weight) data.append('weight', formData.weight);
+      if (formData.goal) data.append('goal', formData.goal);
+      if (profileImage) data.append('image', profileImage);
+
+      // Arrays need to be appended individually for Django ListField or ManyToMany
+      formData.allergies.forEach(id => data.append('allergies', id.toString()));
+      formData.cuisine_preference.forEach(id => data.append('cuisine_preferences', id.toString())); // Typically plural
+      formData.diet_preference.forEach(id => data.append('dietary_preferences', id.toString())); // Backend expects dietary_preferences
+
+      await authService.updateProfile(data);
       await refreshUser?.();
       setIsEditing(false);
       toast.success('Profile updated successfully!');
@@ -234,18 +268,42 @@ export default function ProfilePage() {
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-20">
       {/* Hero Header */}
-      <Card className="relative overflow-hidden p-8 md:p-10 rounded-[2rem] border-border shadow-sm">
+      <Card className="relative overflow-hidden p-6 md:p-8 rounded-xl border-border shadow-sm">
 
         <div className="relative z-10">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="flex flex-col md:flex-row items-start md:items-start justify-between gap-6">
             {/* Profile Info */}
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-5">
+              <div className="relative group">
+                <Avatar className="w-20 h-20 border-4 border-white shadow-xl cursor-pointer">
+                  <AvatarImage src={previewImage || undefined} className="object-cover" />
+                  <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
+                    {formData.fname[0]}
+                  </AvatarFallback>
+                </Avatar>
+                {isEditing && (
+                  <label
+                    htmlFor="profile-upload"
+                    className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white font-medium text-xs backdrop-blur-sm"
+                  >
+                    <Edit2 className="w-5 h-5" />
+                  </label>
+                )}
+                <input
+                  id="profile-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageChange}
+                  disabled={!isEditing}
+                />
+              </div>
 
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">
+                <h1 className="text-xl md:text-2xl font-bold text-foreground mb-0.5">
                   {formData.fname} {formData.lname}
                 </h1>
-                <p className="text-muted-foreground font-medium">{formData.email}</p>
+                <p className="text-muted-foreground font-medium text-sm">{formData.email}</p>
                 <div className="flex items-center gap-2 mt-2">
                   <Badge variant="outline" className="font-mono text-xs">
                     <Hash className="w-3 h-3 mr-1" />
@@ -263,7 +321,7 @@ export default function ProfilePage() {
                     <Button
                       onClick={() => setIsEditing(true)}
                       size="lg"
-                      className="font-bold rounded-xl shadow-lg"
+                      className="font-bold rounded-full"
                     >
                       <Edit2 className="w-4 h-4 mr-2" />
                       Edit Profile
@@ -275,7 +333,7 @@ export default function ProfilePage() {
                       variant="outline"
                       onClick={() => setIsEditing(false)}
                       size="lg"
-                      className="font-bold rounded-xl"
+                      className="font-bold rounded-full"
                     >
                       <X className="w-4 h-4 mr-2" />
                       Cancel
@@ -283,7 +341,7 @@ export default function ProfilePage() {
                     <Button
                       onClick={() => handleSubmit()}
                       size="lg"
-                      className="font-bold rounded-xl shadow-lg"
+                      className="font-bold rounded-full"
                       disabled={isSaving}
                     >
                       <Save className="w-4 h-4 mr-2" />
@@ -297,31 +355,69 @@ export default function ProfilePage() {
 
           {/* Quick Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-            {[
-              { label: 'Height', value: formData.height ? `${formData.height} cm` : 'Not set', icon: Ruler, color: 'text-blue-500', bg: 'bg-blue-100 ' },
-              { label: 'Weight', value: formData.weight ? `${formData.weight} kg` : 'Not set', icon: Weight, color: 'text-emerald-500', bg: 'bg-emerald-100 ' },
-              { label: 'BMI', value: bmi || 'N/A', icon: Activity, color: bmi ? getBmiCategory(Number(bmi)).color : 'text-muted-foreground', bg: bmi ? getBmiCategory(Number(bmi)).bg : 'bg-muted' },
-              { label: 'Goal', value: formData.goal || 'Not set', icon: Target, color: 'text-purple-500', bg: 'bg-purple-100 ' },
-            ].map((stat, i) => (
-              <div key={i} className="bg-background/80 backdrop-blur-sm p-4 rounded-xl border border-border/50">
-                <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg", stat.bg)}>
-                    <stat.icon className={cn("w-4 h-4", stat.color)} />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-                    <p className="text-sm font-bold text-foreground truncate max-w-[100px]">{stat.value}</p>
-                  </div>
+            <div className="bg-background/80 backdrop-blur-sm p-4 rounded-xl border border-border/50">
+              <div className="flex items-center gap-3">
+                <div className={cn("p-2 rounded-lg", "bg-blue-100")}>
+                  <Ruler className={cn("w-4 h-4", "text-blue-500")} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Height</p>
+                  <p className="text-sm font-bold text-foreground truncate max-w-[100px]">{formData.height ? `${formData.height} cm` : 'Not set'}</p>
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div className="bg-background/80 backdrop-blur-sm p-4 rounded-xl border border-border/50 relative group cursor-pointer hover:border-emerald-200 transition-colors" onClick={() => setShowWeightLog(true)}>
+              <div className="flex items-center gap-3">
+                <div className={cn("p-2 rounded-lg", "bg-emerald-100")}>
+                  <Weight className={cn("w-4 h-4", "text-emerald-500")} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                    Weight <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-500" />
+                  </p>
+                  <p className="text-sm font-bold text-foreground truncate max-w-[100px]">{formData.weight ? `${formData.weight} kg` : 'Not set'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-background/80 backdrop-blur-sm p-4 rounded-xl border border-border/50">
+              <div className="flex items-center gap-3">
+                <div className={cn("p-2 rounded-lg", bmi ? getBmiCategory(Number(bmi)).bg : 'bg-muted')}>
+                  <Activity className={cn("w-4 h-4", bmi ? getBmiCategory(Number(bmi)).color : 'text-muted-foreground')} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">BMI</p>
+                  <p className="text-sm font-bold text-foreground truncate max-w-[100px]">{bmi || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-background/80 backdrop-blur-sm p-4 rounded-xl border border-border/50">
+              <div className="flex items-center gap-3">
+                <div className={cn("p-2 rounded-lg", "bg-purple-100")}>
+                  <Target className={cn("w-4 h-4", "text-purple-500")} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Goal</p>
+                  <p className="text-sm font-bold text-foreground truncate max-w-[100px]">{formData.goal || 'Not set'}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </Card>
 
+      <WeightLogDialog
+        open={showWeightLog}
+        onOpenChange={setShowWeightLog}
+        currentWeight={formData.weight}
+        onSuccess={() => refreshUser?.()} // Refresh profile to show new weight
+      />
+
       {/* Tabbed Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full  grid grid-cols-4 h-14 p-1.5 bg-muted rounded-2xl mb-2">
+        <TabsList className="w-full  grid grid-cols-4 h-14 p-1.5 bg-white border  rounded-full mb-2">
           {[
             { value: 'overview', label: 'Overview', icon: User },
             { value: 'health', label: 'Health', icon: Heart },
@@ -331,7 +427,7 @@ export default function ProfilePage() {
             <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className="p-3 rounded-lg data-[state=active]:bg-background data-[state=active]:border-primary data-[state=active]:shadow-md data-[state=active]:text-primary font-semibold text-sm gap-2"
+              className="p-3 rounded-full data-[state=active]:bg-primary data-[state=active]:text-white font-semibold text-sm gap-2"
             >
               <tab.icon className="w-4 h-4" />
               <span className="hidden sm:inline">{tab.label}</span>
@@ -341,7 +437,7 @@ export default function ProfilePage() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="mt-0">
-          <Card className="p-8 rounded-2xl border-border">
+          <Card className="p-6 rounded-2xl border-border">
             <div className="flex items-center gap-3 mb-8">
               <div className="p-2.5 bg-primary rounded-xl text-primary-foreground">
                 <User className="w-5 h-5" />
@@ -427,7 +523,7 @@ export default function ProfilePage() {
 
         {/* Health Tab */}
         <TabsContent value="health" className="mt-0">
-          <Card className="p-8 rounded-2xl border-border">
+          <Card className="p-6 rounded-2xl border-border">
             <div className="flex items-center gap-3 mb-8">
               <div className="p-2.5 bg-emerald-500 rounded-xl text-white">
                 <Heart className="w-5 h-5" />
@@ -487,7 +583,7 @@ export default function ProfilePage() {
         {/* Preferences Tab */}
         <TabsContent value="preferences" className="mt-0 space-y-6">
           {/* Cuisines */}
-          <Card className="p-8 rounded-2xl border-border">
+          <Card className="p-6 rounded-2xl border-border">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2.5 bg-orange-500 rounded-xl text-white">
                 <ChefHat className="w-5 h-5" />
@@ -511,7 +607,7 @@ export default function ProfilePage() {
           </Card>
 
           {/* Diets */}
-          <Card className="p-8 rounded-2xl border-border">
+          <Card className="p-6 rounded-2xl border-border">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2.5 bg-green-500 rounded-xl text-white">
                 <Salad className="w-5 h-5" />
@@ -537,7 +633,7 @@ export default function ProfilePage() {
 
         {/* Allergies Tab */}
         <TabsContent value="allergies" className="mt-0">
-          <Card className="p-8 rounded-2xl border-border">
+          <Card className="p-6 rounded-2xl border-border">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2.5 bg-red-500 rounded-xl text-white">
                 <AlertTriangle className="w-5 h-5" />

@@ -178,7 +178,7 @@ export default function SignupPage() {
         },
     ];
 
-    const inputClasses = "h-14 bg-white/50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-logo focus:ring-4 focus:ring-logo/10 transition-all rounded-lg text-sm font-medium";
+    const inputClasses = "h-14 bg-white/50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all rounded-lg text-sm font-medium";
 
     const stepVariants = {
         hidden: { opacity: 0, x: 20 },
@@ -201,12 +201,12 @@ export default function SignupPage() {
                             <div key={s} className="flex flex-col items-center gap-2">
                                 <motion.div
                                     animate={{
-                                        backgroundColor: s <= step ? '#64f50a' : 'rgba(206, 206, 206, 1)',
+                                        backgroundColor: s <= step ? 'hsl(var(--primary))' : 'rgba(206, 206, 206, 1)',
                                         scale: s === step ? 1.2 : 1
                                     }}
-                                    className={`w-3 h-3 rounded-full shadow-[0_0_10px_rgba(100,245,10,${s <= step ? '0.4' : '0'})]`}
+                                    className={`w-3 h-3 rounded-full shadow-[0_0_10px_rgba(5,150,105,${s <= step ? '0.35' : '0'})]`}
                                 />
-                                <span className={`text-[10px] uppercase tracking-widest font-bold ${s <= step ? 'text-logo' : 'text-gray-400'}`}>Step 0{s}</span>
+                                <span className={`text-xs uppercase tracking-widest font-bold ${s <= step ? 'text-primary' : 'text-gray-400'}`}>Step 0{s}</span>
                             </div>
                         ))}
                         <div className="absolute top-[5.5px] left-0 w-full mx-auto h-px bg-black/5 -z-10" />
@@ -214,7 +214,7 @@ export default function SignupPage() {
                             initial={{ scaleX: 0 }}
                             animate={{ scaleX: (step - 1) / 2 }}
                             style={{ originX: 0 }}
-                            className="absolute top-[5.5px] left-0 w-full h-px bg-logo -z-10 mx-4 transition-transform duration-500"
+                            className="absolute top-[5.5px] left-0 w-full h-px bg-primary -z-10 mx-4 transition-transform duration-500"
                         />
                     </div>
 
@@ -243,8 +243,10 @@ export default function SignupPage() {
                             {step === 1 && (
                                 <div className="space-y-6">
                                     <div className="relative group/field">
-                                        <Mail className={`absolute left-4 top-1/2 ${emailError ? '-translate-y-[22px]' : '-translate-y-1/2'}  w-5 h-5 text-gray-400 group-focus-within/field:text-logo transition-colors`} />
+                                        <label htmlFor="signup-email" className="sr-only">Email Address</label>
+                                        <Mail className={`absolute left-4 top-1/2 ${emailError ? '-translate-y-[22px]' : '-translate-y-1/2'}  w-5 h-5 text-gray-400 group-focus-within/field:text-primary transition-colors`} />
                                         <Input
+                                            id="signup-email"
                                             type="email"
                                             placeholder="Email Address"
                                             value={email}
@@ -263,15 +265,22 @@ export default function SignupPage() {
                                 <div className="space-y-5">
                                     <div className="space-y-4">
                                         <div className="relative group/field">
-                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within/field:text-logo transition-colors" />
+                                            <label htmlFor="signup-password" className="sr-only">Create Secure Password</label>
+                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within/field:text-primary transition-colors" />
                                             <Input
+                                                id="signup-password"
                                                 type={showPassword ? 'text' : 'password'}
                                                 placeholder="Create Secure Password"
                                                 value={password}
                                                 onChange={(e) => handlePasswordChange(e.target.value)}
                                                 className={`${inputClasses} pl-12 pr-12`}
                                             />
-                                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                            >
                                                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                             </button>
                                         </div>
@@ -285,15 +294,17 @@ export default function SignupPage() {
                                                 { key: 'special', label: 'Special' }
                                             ].map((req) => (
                                                 <div key={req.key} className="flex items-center gap-2">
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${passwordValidation[req.key as keyof PasswordValidation] ? 'bg-logo shadow-[0_0_5px_#64f50a]' : 'bg-black/10'}`} />
-                                                    <span className={`text-[10px] uppercase font-bold tracking-wider ${passwordValidation[req.key as keyof PasswordValidation] ? 'text-gray-900' : 'text-gray-400'}`}>{req.label}</span>
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${passwordValidation[req.key as keyof PasswordValidation] ? 'bg-primary shadow-[0_0_6px_rgba(5,150,105,0.45)]' : 'bg-black/10'}`} />
+                                                    <span className={`text-xs uppercase font-bold tracking-wider ${passwordValidation[req.key as keyof PasswordValidation] ? 'text-gray-900' : 'text-gray-400'}`}>{req.label}</span>
                                                 </div>
                                             ))}
                                         </div>
 
                                         <div className="relative group/field">
-                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within/field:text-logo transition-colors" />
+                                            <label htmlFor="signup-confirm-password" className="sr-only">Confirm Password</label>
+                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within/field:text-primary transition-colors" />
                                             <Input
+                                                id="signup-confirm-password"
                                                 type={showConfirmPassword ? 'text' : 'password'}
                                                 placeholder="Confirm Password"
                                                 value={confirmPassword}
@@ -324,7 +335,7 @@ export default function SignupPage() {
                                                 key={opt.role}
                                                 onClick={() => setSelectedRole(opt.role)}
                                                 className={`relative w-full p-4 rounded-lg border-2 transition-all duration-300 text-left overflow-hidden group ${selectedRole === opt.role
-                                                    ? 'border-logo bg-logo/5 shadow-premium'
+                                                    ? 'border-primary bg-primary/5 shadow-premium'
                                                     : 'border-black/5 bg-black/[0.02] hover:bg-black/[0.04]'
                                                     }`}
                                             >
@@ -334,11 +345,11 @@ export default function SignupPage() {
                                                     </div>
                                                     <div>
                                                         <h4 className="font-bold text-gray-900 text-sm">{opt.title}</h4>
-                                                        <p className="text-[10px] text-gray-500 uppercase tracking-widest">{opt.description}</p>
+                                                        <p className="text-xs text-gray-500 uppercase tracking-widest">{opt.description}</p>
                                                     </div>
                                                     {selectedRole === opt.role && (
-                                                        <motion.div layoutId="check" className="ml-auto w-6 h-6 bg-logo rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(100,245,10,0.5)]">
-                                                            <Check className="w-4 h-4 text-black font-bold" />
+                                                        <motion.div layoutId="check" className="ml-auto w-6 h-6 bg-primary rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(5,150,105,0.45)]">
+                                                            <Check className="w-4 h-4 text-white font-bold" />
                                                         </motion.div>
                                                     )}
                                                 </div>
@@ -367,7 +378,7 @@ export default function SignupPage() {
                                                 <span className="flex items-center gap-2">
                                                     <UserPlus className="w-5 h-5" />
                                                     Complete Account
-                                                    <CheckCircle className="w-5 h-5 group-hover:scale-110 transition-transform text-logo" />
+                                                    <CheckCircle className="w-5 h-5 group-hover:scale-110 transition-transform text-primary" />
                                                 </span>
                                             )}
                                         </Button>
@@ -380,7 +391,7 @@ export default function SignupPage() {
                     <div className="mt-8 pt-8 border-t border-black/5 text-center">
                         <p className="text-gray-500 text-sm font-medium">
                             Already have an account?{' '}
-                            <Link to="/login" className="font-bold text-gray-900 hover:text-logo transition-colors link-underline">Log In</Link>
+                            <Link to="/login" className="font-bold text-gray-900 hover:text-primary transition-colors link-underline">Log In</Link>
                         </p>
                     </div>
                 </AuthCard>

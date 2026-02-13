@@ -8,76 +8,84 @@
 
 :root {
   /*
-     LIGHT THEME - Warm, Clean, Spacious
-     Single primary color + extra-rounded corners
+     VITALITY THEME - Glossy Flat
+     Emerald Primary + Slate Neutrals
   */
 
-  /* Base - Soft off-white for warmth */
-  --background: 40 20% 98%;
-  --foreground: 220 15% 20%;
+  /* Base - Warm White Off-white background for contrast */
+  /* Slate-50 equivalent: 210 40% 98% */
+  --background: 0 0% 98%;
+  --foreground: 222 47% 11%;
+  /* Slate-900 */
 
-  /* Cards - Pure white for contrast */
+  /* Cards - Pure White to pop against background */
   --card: 0 0% 100%;
-  --card-foreground: 220 15% 20%;
+  --card-foreground: 215 16% 47%;
+  /* Slate-600 */
 
   --popover: 0 0% 100%;
-  --popover-foreground: 220 15% 20%;
+  --popover-foreground: 222 47% 11%;
 
-  /* Primary - Wellness Green (single accent) */
-  --primary: 152 58% 42%;
+  /* Primary - Emerald 600 */
+  --primary: 159 63% 39%;
+  /* #059669 */
   --primary-foreground: 0 0% 100%;
 
-  /* Secondary - Neutral */
-  --secondary: 220 14% 95%;
-  --secondary-foreground: 220 15% 20%;
+  /* Secondary - Slate 100/200 mix */
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
 
-  /* Muted - Subtle warm gray */
-  --muted: 40 15% 95%;
-  --muted-foreground: 220 10% 50%;
+  /* Muted - Muted Slate */
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215 16% 47%;
 
-  /* Accent - Light green tint */
-  --accent: 152 40% 95%;
-  --accent-foreground: 152 58% 35%;
+  /* Accent - Light Emerald Tint */
+  --accent: 160 84% 97%;
+  /* Emerald 50 */
+  --accent-foreground: 159 63% 39%;
 
   /* Destructive */
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
 
-  /* Borders - Soft and subtle */
-  --border: 40 5% 90%;
-  --input: 40 5% 96%;
-  --ring: 152 58% 42%;
+  /* Borders - Slightly darker for better definition */
+  --border: 214 32% 90%;
+  /* Slate-200 */
+  --input: 214 32% 91%;
+  --ring: 159 63% 39%;
+  /* Primary Ring */
 
-  /* EXTRA-ROUNDED CORNERS */
-  --radius: 0.4rem;
-  --radius-lg: 0.8rem;
-  --radius-xl: 1.2rem;
-  --radius-2xl: 1.6rem;
+  /* GLOSSY RADIUS */
+  --radius: 0.75rem;
+  /* rounded-xl base */
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
 
-  /* COLORFUL CHART PALETTE */
-  --chart-1: 152 58% 42%;
-  /* Green (primary) */
-  --chart-2: 24 95% 53%;
-  /* Vibrant Orange */
-  --chart-3: 262 83% 58%;
-  /* Rich Purple */
-  --chart-4: 199 89% 48%;
-  /* Bright Cyan */
-  --chart-5: 340 82% 52%;
-  /* Hot Pink */
+  /* COLORFUL CHART PALETTE (Shadcn Charts) */
+  --chart-1: 159 63% 39%;
+  /* Emerald */
+  --chart-2: 173 58% 39%;
+  /* Teal */
+  --chart-3: 199 89% 48%;
+  /* Cyan */
+  --chart-4: 47 95% 57%;
+  /* Amber */
+  --chart-5: 14 89% 52%;
+  /* Orange */
 
-  /* Sidebar */
-  --sidebar: 0 0% 100%;
-  --sidebar-foreground: 220 15% 20%;
-  --sidebar-primary: 152 58% 42%;
+  /* Sidebar - Match global background */
+  --sidebar: 210 40% 98%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-primary: 159 63% 39%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 152 40% 95%;
-  --sidebar-accent-foreground: 152 58% 35%;
-  --sidebar-border: 40 10% 92%;
-  --sidebar-ring: 152 58% 42%;
+  --sidebar-accent: 210 40% 96%;
+  --sidebar-accent-foreground: 222 47% 11%;
+  --sidebar-border: 214 32% 91%;
+  --sidebar-ring: 159 63% 39%;
 
   /* Logo */
-  --logo: 152 58% 42%;
+  --logo: 159 63% 39%;
 
   /* SPACIOUS DESIGN TOKENS */
   --spacing-xs: 0.5rem;
@@ -113,8 +121,11 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
   --radius: var(--radius);
-  --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.06), 0 4px 10px -5px rgba(0, 0, 0, 0.03);
-  --shadow-premium-lg: 0 20px 50px -12px rgba(0, 0, 0, 0.10), 0 8px 20px -8px rgba(0, 0, 0, 0.05);
+
+  /* Soft Minimalist Shadows */
+  --shadow-soft-sm: 0 2px 4px -2px rgba(0, 0, 0, 0.05), 0 4px 8px -2px rgba(0, 0, 0, 0.01);
+  --shadow-soft: 0 4px 12px -3px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.02);
+  --shadow-soft-lg: 0 12px 24px -6px rgba(0, 0, 0, 0.09), 0 4px 8px -4px rgba(0, 0, 0, 0.03);
 
   /* Sidebar theme */
   --color-sidebar: hsl(var(--sidebar));
@@ -139,6 +150,15 @@
 @layer base {
   * {
     border-color: hsl(var(--border));
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
   }
 
   body {
@@ -207,10 +227,10 @@ html {
 }
 
 /* Interactive Elements */
-*:focus-visible {
+/* *:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
-}
+} */
 
 /* Custom Scrollbar - Slim and minimal */
 ::-webkit-scrollbar {

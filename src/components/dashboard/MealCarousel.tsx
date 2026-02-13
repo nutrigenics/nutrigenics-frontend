@@ -168,6 +168,7 @@ export function MealCarousel({ onBookmark, onLike }: MealCarouselProps) {
                             className="h-9 w-9 rounded-full border-border"
                             onClick={() => scroll('left')}
                             disabled={!canScrollLeft}
+                            aria-label="Scroll meals left"
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </Button>
@@ -177,6 +178,7 @@ export function MealCarousel({ onBookmark, onLike }: MealCarouselProps) {
                             className="h-9 w-9 rounded-full border-border"
                             onClick={() => scroll('right')}
                             disabled={!canScrollRight}
+                            aria-label="Scroll meals right"
                         >
                             <ChevronRight className="w-4 h-4" />
                         </Button>

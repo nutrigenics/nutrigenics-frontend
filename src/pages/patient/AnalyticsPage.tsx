@@ -12,19 +12,20 @@ import {
   type ComplianceStats,
   type MealDistribution,
   type DailyHistory,
-  type AdvancedStats
+  type AdvancedStats,
+  type WeightHistory
 } from '@/services/analytics.service';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, RadarChart, PolarGrid,
-  PolarAngleAxis, PolarRadiusAxis, Radar, LineChart, Line, Area,
+  PolarAngleAxis, PolarRadiusAxis, Radar, Line, Area, AreaChart,
   ComposedChart, ReferenceLine, RadialBarChart, RadialBar,
   ScatterChart, Scatter, ZAxis
 } from 'recharts';
 import {
   Loader2, Flame, Utensils,
   Zap, Scale, Clock, Heart, Brain, AlertTriangle, CheckCircle2,
-  Lightbulb, TrendingUp, TrendingDown, Info, Sparkles,
+  Info, Sparkles,
   Search, Download, FileJson, ChevronLeft, ChevronRight, FileSpreadsheet,
   X, Plus
 } from 'lucide-react';
@@ -54,10 +55,30 @@ import {
 import { cn } from '@/lib/utils';
 import { format, subDays, startOfMonth } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
+import HydrationWidget from '@/components/analytics/HydrationWidget';
+import SymptomTracker from '@/components/analytics/SymptomTracker';
+import DeficiencyAlert from '@/components/analytics/DeficiencyAlert';
+import FoodMoodChart from '@/components/analytics/FoodMoodChart';
+import vitalSignsService, { type SymptomLog } from '@/services/vital-signs.service';
+import { AnalyticsKPICards } from '@/components/analytics/AnalyticsKPICards';
 
-// Premium Color Palette - Soft, Clinical, Modern
+// Premium Color Palette - Distinct, High-Contrast, Accessible
 const COLORS = {
-  // Primary Gradient Pairs
+  // Chart-specific gradients (start = lighter, end = darker)
+  weight: { start: '#06b6d4', end: '#0891b2', solid: '#0891b2' },      // Cyan
+  calories: { start: '#f97316', end: '#ea580c', solid: '#ea580c' },   // Orange
+  protein: { start: '#22c55e', end: '#16a34a', solid: '#16a34a' },    // Green
+  carbs: { start: '#eab308', end: '#ca8a04', solid: '#ca8a04' },      // Yellow
+  fat: { start: '#ef4444', end: '#dc2626', solid: '#dc2626' },        // Red
+  fiber: { start: '#8b5cf6', end: '#7c3aed', solid: '#7c3aed' },      // Violet
+  sugar: { start: '#ec4899', end: '#db2777', solid: '#db2777' },      // Pink
+  sodium: { start: '#3b82f6', end: '#2563eb', solid: '#2563eb' },     // Blue
+  cholesterol: { start: '#f97316', end: '#c2410c', solid: '#c2410c' },// Deep Orange
+  satFat: { start: '#f87171', end: '#dc2626', solid: '#dc2626' },        // Light Red
+  unsatFat: { start: '#4ade80', end: '#22c55e', solid: '#22c55e' },      // Light Green
+  transFat: { start: '#94a3b8', end: '#64748b', solid: '#64748b' },      // Slate
+
+  // Legacy aliases for compatibility
   teal: { start: '#14b8a6', end: '#0d9488' },
   coral: { start: '#fb7185', end: '#f43f5e' },
   amber: { start: '#fbbf24', end: '#f59e0b' },
@@ -66,6 +87,7 @@ const COLORS = {
   emerald: { start: '#34d399', end: '#10b981' },
   rose: { start: '#fda4af', end: '#fb7185' },
   slate: { start: '#94a3b8', end: '#64748b' },
+
   // Semantic
   good: '#10b981',
   warning: '#f59e0b',
@@ -73,25 +95,14 @@ const COLORS = {
   info: '#3b82f6'
 };
 
-// Insight Component
-const InsightBox = ({ type = 'info', icon: Icon = Lightbulb, children }: { type?: 'good' | 'warning' | 'info', icon?: any, children: React.ReactNode }) => {
-  const styles = {
-    good: 'bg-emerald-50 border-emerald-100 text-emerald-800',
-    warning: 'bg-amber-50 border-amber-100 text-amber-800',
-    info: 'bg-blue-50 border-blue-100 text-blue-800'
-  };
-  const iconColors = { good: 'text-emerald-500', warning: 'text-amber-500', info: 'text-blue-500' };
-
-  return (
-    <div className={cn("w-[98%] mx-auto my-3 p-4 rounded-xl border flex items-start gap-3 text-sm", styles[type])}>
-      <Icon className={cn("w-5 h-5 flex-shrink-0 mt-0.5", iconColors[type])} />
-      <div>
-        {type === 'good' && <p className="font-semibold mb-1">Great Job!</p>}
-        {children}
-      </div>
-    </div>
-  );
+// Axis value formatter for large numbers
+const formatAxisValue = (value: number): string => {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 10000) return `${(value / 1000).toFixed(0)}K`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+  return value.toFixed(0);
 };
+
 
 // Custom Tooltip
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -140,6 +151,8 @@ export default function AnalyticsPage() {
   const [compliance, setCompliance] = useState<ComplianceStats | null>(null);
   const [distribution, setDistribution] = useState<MealDistribution | null>(null);
   const [history, setHistory] = useState<DailyHistory[]>([]); // Chart specific history (bound to period)
+  const [weightHistory, setWeightHistory] = useState<WeightHistory | null>(null);
+  const [symptomHistory, setSymptomHistory] = useState<SymptomLog[]>([]);
   const [advancedStats, setAdvancedStats] = useState<AdvancedStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [hiddenNutrients, setHiddenNutrients] = useState<string[]>([]);
@@ -195,7 +208,8 @@ export default function AnalyticsPage() {
     setSelectedWeekdays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
   };
 
-  const toggleVisibility = (value: string) => {
+  const toggleVisibility = (data: any) => {
+    const { value } = data;
     setHiddenNutrients(prev =>
       prev.includes(value)
         ? prev.filter(n => n !== value)
@@ -218,13 +232,15 @@ export default function AnalyticsPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [statsData, complianceData, distributionData, historyData, advData, fullHistoryData] = await Promise.all([
+        const [statsData, complianceData, distributionData, historyData, advData, fullHistoryData, weightHistoryData, symptomData] = await Promise.all([
           analyticsService.getPatientAnalytics(period),
           analyticsService.getComplianceStats(),
           analyticsService.getMealDistribution(days),
           analyticsService.getDailyHistory(days),
           analyticsService.getAdvancedStats(),
-          analyticsService.getDailyHistory(180) // Fetch strict 180 days for the table regardless of chart selection
+          analyticsService.getDailyHistory(180), // Fetch strict 180 days for the table regardless of chart selection
+          analyticsService.getWeightHistory(days < 30 ? 30 : days), // Always fetch at least 30 days for weight
+          vitalSignsService.getRecentSymptoms()
         ]);
 
         setStats(statsData);
@@ -233,6 +249,8 @@ export default function AnalyticsPage() {
         setHistory(historyData);
         setAdvancedStats(advData);
         setFullHistory(fullHistoryData);
+        setWeightHistory(weightHistoryData);
+        setSymptomHistory(symptomData);
       } catch (error) {
         console.error('Failed to fetch analytics:', error);
       } finally {
@@ -366,7 +384,10 @@ export default function AnalyticsPage() {
       day.total_fat,
       day.total_fiber,
       day.total_sugar,
-      day.total_sodium
+      day.total_sodium,
+      day.total_cholesterol,
+      day.total_saturated_fat,
+      // New fields might ideally be added here for export, but skipping for brevity
     ]);
 
     // Combine
@@ -427,7 +448,7 @@ export default function AnalyticsPage() {
   };
 
   // --- Data Processing ---
-  const weightKg = patient?.weight || 70;
+
 
   // Centralized targets
   const t = getNutrientTargets(patient, advancedStats?.tdee);
@@ -438,52 +459,23 @@ export default function AnalyticsPage() {
   const avgSugar = useMemo(() => (stats?.limiting_nutrients.find(n => n.name === 'Sugar')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
   const avgSodium = useMemo(() => (stats?.micro_nutrients.find(n => n.name === 'Sodium')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
   const avgChol = useMemo(() => (stats?.micro_nutrients.find(n => n.name === 'Cholesterol')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
+
+  // New Micros (Removed manual averages as they are handled dynamically in the mapping)
+
+
   const avgSatFat = useMemo(() => (stats?.limiting_nutrients.find(n => n.name === 'Saturated Fat')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
   const avgFat = useMemo(() => (stats?.macro_nutrients.find(n => n.name === 'Fat')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
   const avgTransFat = useMemo(() => (stats?.limiting_nutrients.find(n => n.name === 'Trans-fat')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
 
-  const weightImpact = useMemo(() => {
-    const dailyBalance = advancedStats?.daily_balance || 0;
-    // 7700 kcal ≈ 1kg fat. Weekly change = (daily_balance * 7) / 7700
-    const weeklyChangeKg = (dailyBalance * 7) / 7700;
-    let color = 'text-gray-600';
-    if (weeklyChangeKg < -0.2) color = 'text-blue-600'; // Losing weight
-    if (weeklyChangeKg > 0.2) color = 'text-rose-600'; // Gaining weight
-    return { value: Number(weeklyChangeKg.toFixed(2)), color };
-  }, [advancedStats]);
 
-  const nutrientGaps = useMemo(() => {
-    const gaps: string[] = [];
-    if (avgFiber < t.fiber * 0.75) gaps.push('Fiber');
-    if (avgProtein < t.protein * 0.75) gaps.push('Protein');
-    // Using simple averages for micro checks
-    if (stats?.micro_nutrients) {
-      for (const m of stats.micro_nutrients) {
-        // This is a simplified check, ideally would use specific targets map
-        const val = m.data.reduce((a, b) => a + b, 0) / days;
-        // Heuristic: If value is < 50% of typical RDA, flag it (improving this logic would require per-nutrient RDA mapping)
-        // For now, rely on explicitly mapped ones if available in 't' or general ones
-        if (['Iron', 'Calcium', 'Vitamin D'].includes(m.name)) {
-          // Placeholder thresholds if not in 't'
-          const threshold = m.name === 'Iron' ? 18 : m.name === 'Calcium' ? 1000 : 15;
-          if (val < threshold * 0.75) gaps.push(m.name);
-        }
-      }
-    }
-    return gaps;
-  }, [avgFiber, avgProtein, stats, t, days]);
 
-  const heartScore = useMemo(() => {
-    let score = 100;
-    if (avgSodium > t.sodium) score -= Math.min(30, ((avgSodium - t.sodium) / t.sodium) * 50);
-    if (avgChol > t.cholesterol) score -= Math.min(30, ((avgChol - t.cholesterol) / t.cholesterol) * 50);
-    if (avgSatFat > t.saturated_fat) score -= Math.min(30, ((avgSatFat - t.saturated_fat) / t.saturated_fat) * 50);
-    return Math.max(0, Math.round(score));
-  }, [avgSodium, avgChol, avgSatFat, t]);
+
+
+
 
   const carbQualityScore = avgSugar > 0 ? (avgFiber / avgSugar) : 0;
 
-  const trendData = history.map(h => ({
+  const trendData = [...history].reverse().map(h => ({
     date: new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     Calories: h.total_calories || 0,
     Target: t.calories,
@@ -497,7 +489,13 @@ export default function AnalyticsPage() {
     'Saturated Fat': h.total_saturated_fat || 0,
     'Unsaturated Fat': h.total_unsaturated_fat || 0,
     'Trans-fat': h.total_trans_fat || 0,
+    'Iron': h.total_iron || 0,
+    'Calcium': h.total_calcium || 0,
+    'Vitamin D': h.total_vitamin_d || 0,
+    'Potassium': h.total_potassium || 0
   }));
+
+  const hasData = trendData.some(d => d.Calories > 0);
 
   const normalizedTrendData = trendData.map(day => ({
     ...day,
@@ -577,6 +575,27 @@ export default function AnalyticsPage() {
     return { type: 'warning' as const, text: `${riskNames} intake is elevated. Reduce processed foods, deli meats, and fried items.` };
   }, [heartRadarData]);
 
+  // Weight Trend Data Prep
+  const weightChartData = useMemo(() => {
+    if (!weightHistory) return [];
+    return weightHistory.dates.map((date, i) => ({
+      date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      weight: weightHistory.weights[i],
+      calories: weightHistory.calories[i]
+    }));
+  }, [weightHistory]);
+
+  const weightTrendInsight = useMemo(() => {
+    if (!weightHistory || !weightHistory.weights || weightHistory.weights.length < 2) return { type: 'info' as const, text: 'Not enough data to determine weight trend.' };
+    const start = weightHistory.weights[0];
+    const end = weightHistory.weights[weightHistory.weights.length - 1];
+    const diff = end - start;
+
+    if (diff < -0.5) return { type: 'good' as const, text: `Great progress! You've lost ${Math.abs(diff).toFixed(1)}kg this period.` };
+    if (diff > 0.5) return { type: 'warning' as const, text: `Weight has increased by ${diff.toFixed(1)}kg. Check your calorie balance.` };
+    return { type: 'info' as const, text: `Your weight is stable (${Math.abs(diff).toFixed(1)}kg change). Consistency is key!` };
+  }, [weightHistory]);
+
   if (loading && !stats) {
     return (
       <>
@@ -613,119 +632,15 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Section 1: Clinical KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-4">
-          {/* Adherence */}
-          <Card className="relative overflow-hidden bg-white border-gray-100 shadow-sm transition-all hover:shadow-md h-full">
-            <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-emerald-100/50 text-[10px] font-semibold text-emerald-700 pointer-events-none">
-              {compliance?.streak || 0} Day Streak 🔥
-            </div>
-            <CardHeader className="p-4 pb-1">
-              <CardTitle className="text-xs font-bold text-emerald-700 uppercase tracking-widest">Adherence Rate</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-1">
-              <div className="flex flex-col h-full justify-center">
-                <div className="text-3xl font-extrabold text-emerald-600 tracking-tight flex items-baseline gap-1">
-                  {compliance?.compliance_rate || 0}
-                  <span className="text-lg text-emerald-400">%</span>
-                </div>
-                <p className="text-xs font-medium text-emerald-600/60 mt-1">
-                  Consistency Score
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Weight Impact */}
-          <Card className="relative overflow-hidden bg-white border-gray-100 shadow-sm transition-all hover:shadow-md h-full">
-            <CardHeader className="p-4 pb-1">
-              <CardTitle className={cn("text-xs font-bold uppercase tracking-widest", weightImpact.color)}>Est. Weight Impact</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-1">
-              <div className={cn("text-3xl font-extrabold flex items-center gap-2 tracking-tight", weightImpact.color)}>
-                {weightImpact.value > 0 ? '+' : ''}{weightImpact.value}
-                <span className="text-lg font-semibold text-gray-400">kg/wk</span>
-                {weightImpact.value > 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-              </div>
-              <p className="text-xs font-medium opacity-60 mt-1">Based on {period === 'weekly' ? '7-day' : 'avg'} energy balance</p>
-            </CardContent>
-          </Card>
-
-          {/* Protein Score */}
-          <Card className="relative shadow-sm transition-all hover:shadow-md h-full">
-            <CardHeader className="p-4 pb-1"><CardTitle className="text-xs font-bold uppercase text-gray-500 tracking-widest">Protein Intake</CardTitle></CardHeader>
-            <CardContent className="p-4 pt-1">
-              <div className="text-3xl font-extrabold flex items-baseline gap-2 tracking-tight">
-                {(avgProtein / weightKg).toFixed(1)} <span className="text-lg font-medium text-muted-foreground">g/kg</span>
-              </div>
-              <div className="mt-3">
-                <div className="flex justify-between text-[10px] font-bold mb-1.5">
-                  <span className="text-emerald-700">Daily Average</span>
-                  <span className="text-gray-400">Target: 1.6 g/kg</span>
-                </div>
-                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-teal-600 transition-all duration-700 shadow-sm" style={{ width: `${Math.min(((avgProtein / weightKg) / 1.6) * 100, 100)}%` }} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Nutrient Gaps (Clean Style) */}
-          <Card className="relative shadow-sm transition-all hover:shadow-md h-full bg-white border-gray-100">
-            <div className="absolute top-3 right-3">
-              {nutrientGaps.length === 0 ? (
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">OPTIMAL</span>
-              ) : (
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full">ATTENTION NEEDED</span>
-              )}
-            </div>
-            <CardHeader className="p-4 pb-1"><CardTitle className="text-xs font-bold uppercase text-gray-500 tracking-widest">Nutrient Gaps</CardTitle></CardHeader>
-            <CardContent className="p-4 pt-1 flex flex-col justify-center min-h-[90px]">
-              {nutrientGaps.length > 0 ? (
-                <div>
-                  <div className="text-3xl font-extrabold text-amber-600 mb-1">{nutrientGaps.length}</div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Deficiencies Detected</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {nutrientGaps.slice(0, 3).map(g => (
-                      <span key={g} className="px-1.5 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-md uppercase border border-amber-100">{g}</span>
-                    ))}
-                    {nutrientGaps.length > 3 && <span className="text-[10px] text-gray-500 self-center">+{nutrientGaps.length - 3} more</span>}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div className="text-3xl font-extrabold text-emerald-600 mb-1">100<span className="text-lg text-emerald-400">%</span></div>
-                  <p className="text-xs font-medium text-emerald-600/60 mt-1">
-                    Nutrient Coverage Met
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Carb Quality */}
-          <Card className="relative shadow-sm transition-all hover:shadow-md h-full">
-            <div className={cn("absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tighter", carbQualityScore >= 0.2 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
-              {carbQualityScore >= 0.2 ? 'High Quality' : 'Needs Optimization'}
-            </div>
-            <CardHeader className="p-4 pb-1"><CardTitle className="text-xs font-bold uppercase text-gray-500 tracking-widest">Glycemic Quality</CardTitle></CardHeader>
-            <CardContent className="p-4 pt-1">
-              <div className="text-3xl font-extrabold tracking-tight">{carbQualityScore.toFixed(2)}</div>
-              <p className="text-[10px] font-semibold text-muted-foreground mt-2">Fiber to Sugar Ratio (&gt;0.2 Ideal)</p>
-            </CardContent>
-          </Card>
-
-          {/* Heart Score */}
-          <Card className="relative overflow-hidden bg-white border-gray-100 shadow-sm transition-all hover:shadow-md h-full">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-rose-200/40 rounded-full blur-xl -mr-10 -mt-10 pointer-events-none" />
-            <CardHeader className="p-4 pb-1"><CardTitle className="text-xs font-bold uppercase tracking-widest text-gray-600">Cardio Score</CardTitle></CardHeader>
-            <CardContent className="p-4 pt-1">
-              <div className={cn("text-3xl font-extrabold flex items-center gap-2 tracking-tight", heartScore >= 80 ? 'text-emerald-700' : 'text-orange-700')}>
-                {heartScore}
-                <Heart className={cn("w-5 h-5", heartScore >= 80 ? 'text-emerald-500 fill-emerald-200' : 'text-orange-500')} />
-              </div>
-              <p className="text-[10px] font-semibold text-muted-foreground mt-2">Overall Heart Health Benchmark</p>
-            </CardContent>
-          </Card>
+        <div className="mb-8">
+          <AnalyticsKPICards
+            patient={patient}
+            stats={stats}
+            compliance={compliance}
+            advancedStats={advancedStats}
+            weightHistory={weightHistory}
+            days={days}
+          />
         </div>
 
         {/* Section 2: Energy Analysis */}
@@ -733,79 +648,122 @@ export default function AnalyticsPage() {
           <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
             <Flame className="w-6 h-6 text-orange-500" /> Energy Analysis
           </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-4">
             <Card className="lg:col-span-2 shadow-sm transition-all duration-300 hover:shadow-md">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Calories vs Target (TDEE)
-                  <TooltipProvider>
-                    <ShadTooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-[200px]">Compares your daily calorie intake against your Total Daily Energy Expenditure (TDEE) target.</p>
-                      </TooltipContent>
-                    </ShadTooltip>
-                  </TooltipProvider>
-                </CardTitle>
-                <CardDescription>How your daily intake compares to your energy needs</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                      Calories vs Target (TDEE)
+                      <TooltipProvider>
+                        <ShadTooltip>
+                          <TooltipTrigger><Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" /></TooltipTrigger>
+                          <TooltipContent><p className="max-w-[200px]">Compares your daily calorie intake against your Total Daily Energy Expenditure (TDEE) target.</p></TooltipContent>
+                        </ShadTooltip>
+                      </TooltipProvider>
+                    </CardTitle>
+                    <CardDescription>How your daily intake compares to your energy needs</CardDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Show calorie insight" className={cn("p-2 rounded-full transition-colors", energyInsight.type === 'good' ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' : energyInsight.type === 'warning' ? 'bg-amber-100 text-amber-600 hover:bg-amber-200' : 'bg-blue-100 text-blue-600 hover:bg-blue-200')}>
+                        {energyInsight.type === 'good' ? <CheckCircle2 className="w-5 h-5" /> : energyInsight.type === 'warning' ? <AlertTriangle className="w-5 h-5" /> : <Info className="w-5 h-5" />}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="end">
+                      <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                        {energyInsight.type === 'good' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Info className="w-4 h-4" />}
+                        {energyInsight.type} Insight
+                      </div>
+                      <p className="text-sm text-gray-600">{energyInsight.text}</p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardHeader>
-              <CardContent className="h-[400px] mt-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="calGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={COLORS.amber.start} stopOpacity={0.8} />
-                        <stop offset="95%" stopColor={COLORS.amber.end} stopOpacity={0.2} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis dataKey="date" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} interval={0} tickFormatter={(val, index) => {
-                      if (days <= 7) return val;
-                      if (days <= 30) return index % 3 === 0 ? val : '';
-                      if (days <= 60) return index % 6 === 0 ? val : '';
-                      return index % 14 === 0 ? val : '';
-                    }} />
-                    <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Area type="monotone" dataKey="Calories" stroke={COLORS.amber.start} fill="url(#calGradient)" strokeWidth={2} name="Intake" />
-                    <Line type="monotone" dataKey="Target" stroke={COLORS.coral.start} strokeWidth={2.5} strokeDasharray="6 4" dot={false} name="TDEE Target" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-
+              <CardContent className="h-[450px] mt-0 flex items-center justify-center p-6 pt-0">
+                {hasData ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="calGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.amber.start} stopOpacity={0.8} />
+                          <stop offset="95%" stopColor={COLORS.amber.end} stopOpacity={0.2} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                      <XAxis dataKey="date" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} interval={0} tickFormatter={(val, index) => {
+                        if (days <= 7) return val;
+                        if (days <= 30) return index % 3 === 0 ? val : '';
+                        if (days <= 60) return index % 6 === 0 ? val : '';
+                        return index % 14 === 0 ? val : '';
+                      }} />
+                      <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend iconType="circle" iconSize={10} />
+                      <Area type="monotone" dataKey="Calories" stroke={COLORS.amber.start} fill="url(#calGradient)" strokeWidth={2} name="Intake" />
+                      <Line type="monotone" dataKey="Target" stroke={COLORS.coral.start} strokeWidth={2.5} strokeDasharray="6 4" dot={false} name="TDEE Target" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <p>No data recorded for this period</p>
+                    <Button variant="link" className="mt-2 text-primary" onClick={() => setPeriod('monthly')}>
+                      Switch to Monthly View
+                    </Button>
+                  </div>
+                )}
               </CardContent>
-              <div className="px-6 pb-6">
-                <InsightBox type={energyInsight.type} icon={energyInsight.type === 'good' ? CheckCircle2 : AlertTriangle}>
-                  {energyInsight.text}
-                </InsightBox>
-              </div>
             </Card>
 
             <Card className="shadow-sm transition-all duration-300 hover:shadow-md h-full flex flex-col">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Meal Timing
-                  <TooltipProvider>
-                    <ShadTooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-[200px]">Shows how your daily calories are distributed across Breakfast, Lunch, Dinner, and Snacks.</p>
-                      </TooltipContent>
-                    </ShadTooltip>
-                  </TooltipProvider>
-                </CardTitle>
-                <CardDescription>Calorie distribution by meal</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                      Meal Timing
+                      <TooltipProvider>
+                        <ShadTooltip>
+                          <TooltipTrigger>
+                            <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-[200px]">Shows how your daily calories are distributed across Breakfast, Lunch, Dinner, and Snacks.</p>
+                          </TooltipContent>
+                        </ShadTooltip>
+                      </TooltipProvider>
+                    </CardTitle>
+                    <CardDescription>Calorie distribution by meal</CardDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Show meal timing insight" className="p-2 rounded-full transition-colors bg-blue-100 text-blue-600 hover:bg-blue-200">
+                        <Info className="w-5 h-5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="end">
+                      <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                        <Info className="w-4 h-4 text-blue-600" />
+                        Timing Insight
+                      </div>
+                      <p className="text-sm text-gray-600">Balanced meal distribution helps maintain steady energy levels throughout the day.</p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardHeader>
-              <CardContent className="flex-1 min-h-[300px] flex items-center justify-center">
+              <CardContent className="h-[300px] flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={distribution?.distribution || []} innerRadius={70} outerRadius={100} paddingAngle={3} dataKey="value" animationDuration={500}>
+                    <Pie
+                      data={distribution?.distribution || []}
+                      innerRadius={70}
+                      outerRadius={100}
+                      paddingAngle={4}
+                      dataKey="value"
+                      animationDuration={500}
+                      cornerRadius={8}
+                    >
                       {(distribution?.distribution || []).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={[COLORS.teal.start, COLORS.amber.start, COLORS.violet.start, COLORS.slate.start][index % 4]} strokeWidth={0} />
+                        <Cell key={`cell-${index}`} fill={[COLORS.protein.start, COLORS.carbs.start, COLORS.fiber.start, COLORS.sodium.start][index % 4]} strokeWidth={0} />
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
@@ -815,13 +773,180 @@ export default function AnalyticsPage() {
               <div className="px-6 pb-6 flex flex-wrap gap-3 justify-center text-xs">
                 {(distribution?.distribution || []).map((d, i) => (
                   <div key={d.name} className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: [COLORS.teal.start, COLORS.amber.start, COLORS.violet.start, COLORS.slate.start][i % 4] }} />
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: [COLORS.protein.start, COLORS.carbs.start, COLORS.fiber.start, COLORS.sodium.start][i % 4] }} />
                     <span className="text-gray-600">{d.name}</span>
                   </div>
                 ))}
               </div>
             </Card>
           </div>
+        </section>
+
+        {/* Section 2a: Clinical Vitals & Deep Nutrition */}
+        <section className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="h-[380px]">
+            <HydrationWidget />
+          </div>
+          <div className="h-[380px]">
+            <SymptomTracker />
+          </div>
+          <div className="h-[380px]">
+            <DeficiencyAlert
+              nutrients={[...(stats?.macro_nutrients || []), ...(stats?.micro_nutrients || [])]}
+              limits={{
+                'Protein': { daily: t.protein },
+                'Fiber': { daily: t.fiber },
+                'Sodium': { daily: t.sodium },
+                'Cholesterol': { daily: t.cholesterol },
+                'Saturated Fat': { daily: t.saturated_fat },
+                'Sugar': { daily: t.sugar },
+                // Add more from 't' if available or rely on defaults
+              }}
+            />
+          </div>
+        </section>
+
+        {/* Section 2b: Food-Mood Correlation */}
+        <section className="mb-8">
+          <FoodMoodChart
+            dates={stats?.dates || []}
+            microNutrients={[...(stats?.macro_nutrients || []), ...(stats?.micro_nutrients || [])]}
+            symptomLogs={symptomHistory}
+          />
+        </section>
+
+        {/* Section 2b: Weight Progression */}
+        <section className="mb-8">
+          <Card className="col-span-full shadow-sm transition-all duration-300 hover:shadow-md bg-white border border-gray-100">
+            <CardHeader className="border-b border-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <Scale className="w-5 h-5 text-teal-500" />
+                    Weight Progression vs Intake
+                    <TooltipProvider>
+                      <ShadTooltip>
+                        <TooltipTrigger>
+                          <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-[200px]">Correlates your daily calorie intake with weight changes over time.</p>
+                        </TooltipContent>
+                      </ShadTooltip>
+                    </TooltipProvider>
+                  </CardTitle>
+                  <CardDescription>Track how your calorie intake correlates with weight changes.</CardDescription>
+                </div>
+                {/* Weight Insight */}
+                <div className="flex items-center gap-4 text-sm">
+                  {weightChartData.length > 0 && weightChartData.some(d => d.weight) && (
+                    <>
+                      <div className="flex items-center gap-1.5 px-3 py-1 bg-teal-50 text-teal-700 rounded-full font-medium">
+                        Starting: <span className="font-bold">{weightChartData.find(d => d.weight)?.weight} kg</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-3 py-1 bg-violet-50 text-violet-700 rounded-full font-medium">
+                        Current: <span className="font-bold">{[...weightChartData].reverse().find(d => d.weight)?.weight} kg</span>
+                      </div>
+                    </>
+                  )}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Show weight trend insight" className={cn("p-2 rounded-full transition-colors", weightTrendInsight.type === 'good' ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' : weightTrendInsight.type === 'warning' ? 'bg-amber-100 text-amber-600 hover:bg-amber-200' : 'bg-blue-100 text-blue-600 hover:bg-blue-200')}>
+                        <Info className="w-5 h-5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="end">
+                      <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                        <Info className={cn("w-4 h-4", weightTrendInsight.type === 'good' ? "text-emerald-500" : "text-blue-500")} />
+                        Weight Insight
+                      </div>
+                      <p className="text-sm text-gray-600">{weightTrendInsight.text}</p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="h-[400px] mt-4 flex items-center justify-center p-4">
+              {weightChartData.length > 0 && weightChartData.some(d => d.weight !== null && d.weight !== undefined && d.weight > 0) ? (
+                <ResponsiveContainer width="100%" height={400}>
+                  <ComposedChart data={weightChartData} margin={{ top: 20, right: 30, left: 10, bottom: 10 }}>
+                    <defs>
+                      <linearGradient id="gradWeight" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={COLORS.weight.start} stopOpacity={1} />
+                        <stop offset="100%" stopColor={COLORS.weight.end} stopOpacity={0.8} />
+                      </linearGradient>
+                      <linearGradient id="gradCalories" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={COLORS.calories.start} stopOpacity={0.6} />
+                        <stop offset="100%" stopColor={COLORS.calories.end} stopOpacity={0.2} />
+                      </linearGradient>
+                      <filter id="glow">
+                        <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                        <feMerge>
+                          <feMergeNode in="coloredBlur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
+                    <XAxis
+                      dataKey="date"
+                      stroke="#94a3b8"
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickLine={false}
+                      axisLine={false}
+                      minTickGap={40}
+                      dy={10}
+                    />
+                    <YAxis
+                      yAxisId="left"
+                      stroke={COLORS.weight.solid}
+                      domain={['dataMin - 2', 'dataMax + 2']}
+                      tick={{ fontSize: 11, fill: COLORS.weight.solid }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) => `${v}`}
+                      label={{ value: 'Weight (kg)', angle: -90, position: 'insideLeft', style: { fill: COLORS.weight.solid, fontSize: 12 }, offset: 10 }}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      stroke={COLORS.calories.solid}
+                      tick={{ fontSize: 11, fill: COLORS.calories.solid }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={formatAxisValue}
+                      label={{ value: 'Calories', angle: 90, position: 'insideRight', style: { fill: COLORS.calories.solid, fontSize: 12 }, offset: 10 }}
+                    />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9', opacity: 0.4 }} />
+                    <Legend wrapperStyle={{ paddingTop: '15px' }} iconType="circle" iconSize={10} />
+
+                    <Bar
+                      yAxisId="right"
+                      dataKey="calories"
+                      name="Calories"
+                      fill="url(#gradCalories)"
+                      radius={50}
+                      maxBarSize={40}
+                    />
+                    <Area
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="weight"
+                      name="Weight"
+                      stroke="url(#gradWeight)"
+                      strokeWidth={3}
+                      fill="url(#gradWeight)"
+                      fillOpacity={0.15}
+                      dot={false}
+                      activeDot={{ r: 6, fill: COLORS.weight.start, stroke: '#fff', strokeWidth: 2 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-400">No weight data available</div>
+              )}
+            </CardContent>
+          </Card>
         </section>
 
         {/* Section 3: Nutrient Trends */}
@@ -849,156 +974,447 @@ export default function AnalyticsPage() {
                   useNormalized ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-gray-900"
                 )}
               >
-                % of Goal <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">Advanced</span>
+                % of Goal <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">Advanced</span>
               </button>
             </div>
           </div>
 
-          <div className="flex flex-col gap-8 lg:gap-12">
+          <div className="flex flex-col gap-4 lg:gap-4">
             {/* Macronutrient Trends */}
             <Card className="shadow-sm transition-all duration-300 hover:shadow-md">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {useNormalized ? "Macronutrient Daily Trends (% of Goal)" : "Macronutrient Daily Trends"}
-                  <TooltipProvider>
-                    <ShadTooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-[200px]">
-                          {useNormalized
-                            ? "Tracks nutrients relative to your daily goals. 100% means you hit your target exactly."
-                            : "Tracks daily intake in grams (g) or calories (kcal)."}
-                        </p>
-                      </TooltipContent>
-                    </ShadTooltip>
-                  </TooltipProvider>
-                </CardTitle>
-                <CardDescription>Calories, Protein, Carbohydrates, Fat, Fiber, and Sugar</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                      {useNormalized ? "Macronutrient Daily Trends (% of Goal)" : "Macronutrient Daily Trends"}
+                      <TooltipProvider>
+                        <ShadTooltip>
+                          <TooltipTrigger><Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" /></TooltipTrigger>
+                          <TooltipContent><p className="max-w-[200px]">{useNormalized ? "Tracks nutrients relative to your daily goals. 100% means you hit your target exactly." : "Tracks daily intake in grams (g) or calories (kcal)."}</p></TooltipContent>
+                        </ShadTooltip>
+                      </TooltipProvider>
+                    </CardTitle>
+                    <CardDescription>Calories, Protein, Carbohydrates, Fat, Fiber, and Sugar</CardDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Show macronutrient insight" className={cn("p-2 rounded-full transition-colors", macroInsight.type === 'good' ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' : macroInsight.type === 'warning' ? 'bg-amber-100 text-amber-600 hover:bg-amber-200' : 'bg-blue-100 text-blue-600 hover:bg-blue-200')}>
+                        <Info className="w-5 h-5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="end">
+                      <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                        <Info className={cn("w-4 h-4", macroInsight.type === 'good' ? "text-emerald-500" : "text-blue-500")} />
+                        {macroInsight.type} Insight
+                      </div>
+                      <p className="text-sm text-gray-600">{macroInsight.text}</p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardHeader>
-              <CardContent className="h-[450px] mt-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={useNormalized ? normalizedTrendData : trendData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis dataKey="date" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} interval={0} tickFormatter={(val, index) => {
-                      if (days <= 7) return val;
-                      if (days <= 30) return index % 3 === 0 ? val : '';
-                      if (days <= 60) return index % 6 === 0 ? val : '';
-                      return index % 14 === 0 ? val : '';
-                    }} />
-
-                    {/* Y-Axes Logic */}
-                    {useNormalized ? (
-                      <YAxis yAxisId="left" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} unit="%" />
-                    ) : (
-                      <>
-                        <YAxis yAxisId="cal" orientation="left" stroke="#6366f1" fontSize={12} tickLine={false} axisLine={false} label={{ value: 'Calories', angle: -90, position: 'insideLeft', offset: 0, fill: '#6366f1' }} />
-                        <YAxis yAxisId="grams" orientation="right" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} label={{ value: 'Grams', angle: 90, position: 'insideRight', offset: 10, fill: '#9CA3AF' }} />
-                      </>
-                    )}
-
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend onClick={toggleVisibility} wrapperStyle={{ cursor: 'pointer', paddingTop: '20px' }} />
-
-                    {useNormalized && <ReferenceLine y={100} yAxisId="left" stroke="#10b981" strokeDasharray="3 3" label={{ position: 'top', value: 'Goal', fill: '#10b981', fontSize: 10 }} />}
-
-                    {/* Lines - conditionally use Pct keys or standard keys */}
-                    <Line yAxisId={useNormalized ? "left" : "cal"} type="monotone" dataKey={useNormalized ? "CaloriesPct" : "Calories"} name="Calories" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} hide={hiddenNutrients.includes('Calories')} />
-                    <Line yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "ProteinPct" : "Protein"} name="Protein" stroke={COLORS.emerald.start} strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Protein')} />
-                    <Line yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "CarbohydratesPct" : "Carbohydrates"} name="Carbohydrates" stroke={COLORS.amber.start} strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Carbohydrates')} />
-                    <Line yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "FatPct" : "Fat"} name="Fat" stroke={COLORS.coral.start} strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Fat')} />
-                    <Line yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "FiberPct" : "Fiber"} name="Fiber" stroke="#8b5cf6" strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Fiber')} />
-                    <Line yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "SugarPct" : "Sugar"} name="Sugar" stroke="#ec4899" strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Sugar')} />
-
-
-                  </LineChart>
-                </ResponsiveContainer>
+              <CardContent className="h-[500px] mt-0 flex items-center justify-center p-6 pt-0">
+                {hasData ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={useNormalized ? normalizedTrendData : trendData} margin={{ top: 20, right: 35, left: 15, bottom: 25 }}>
+                      <defs>
+                        {/* Macronutrient Gradients */}
+                        <linearGradient id="gradCaloriesLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.calories.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.calories.start} stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="gradProteinLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.protein.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.protein.start} stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="gradCarbsLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.carbs.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.carbs.start} stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="gradFatLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.fat.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.fat.start} stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="gradFiberLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.fiber.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.fiber.start} stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="gradSugarLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.sugar.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.sugar.start} stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
+                      <XAxis
+                        dataKey="date"
+                        stroke="#94a3b8"
+                        fontSize={11}
+                        tickLine={false}
+                        axisLine={false}
+                        interval={0}
+                        dy={10}
+                        tick={{ fill: '#64748b' }}
+                        tickFormatter={(val, index) => {
+                          if (days <= 7) return val;
+                          if (days <= 30) return index % 3 === 0 ? val : '';
+                          if (days <= 60) return index % 6 === 0 ? val : '';
+                          return index % 14 === 0 ? val : '';
+                        }}
+                      />
+                      {useNormalized ? (
+                        <YAxis
+                          yAxisId="left"
+                          stroke="#94a3b8"
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          unit="%"
+                          tick={{ fill: '#64748b' }}
+                        />
+                      ) : (
+                        <>
+                          <YAxis
+                            yAxisId="cal"
+                            orientation="left"
+                            stroke={COLORS.calories.solid}
+                            fontSize={11}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={formatAxisValue}
+                            tick={{ fill: COLORS.calories.solid }}
+                            label={{ value: 'Calories', angle: -90, position: 'insideLeft', offset: 5, fill: COLORS.calories.solid, fontSize: 12 }}
+                          />
+                          <YAxis
+                            yAxisId="grams"
+                            orientation="right"
+                            stroke="#64748b"
+                            fontSize={11}
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: '#64748b' }}
+                            label={{ value: 'Grams', angle: 90, position: 'insideRight', offset: 10, fill: '#64748b', fontSize: 12 }}
+                          />
+                        </>
+                      )}
+                      <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1', strokeDasharray: '3 3' }} />
+                      <Legend
+                        onClick={toggleVisibility}
+                        iconType="circle"
+                        iconSize={10}
+                        wrapperStyle={{ cursor: 'pointer', paddingTop: '15px' }}
+                      />
+                      {useNormalized && <ReferenceLine y={100} yAxisId="left" stroke={COLORS.good} strokeDasharray="5 5" strokeWidth={2} label={{ position: 'right', value: '100% Goal', fill: COLORS.good, fontSize: 11, fontWeight: 500 }} />}
+                      <Area
+                        yAxisId={useNormalized ? "left" : "cal"}
+                        type="monotone"
+                        dataKey={useNormalized ? "CaloriesPct" : "Calories"}
+                        name="Calories"
+                        stroke={COLORS.calories.solid}
+                        fill="url(#gradCaloriesLine)"
+                        strokeWidth={3}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.calories.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Calories')}
+                      />
+                      <Area
+                        yAxisId={useNormalized ? "left" : "grams"}
+                        type="monotone"
+                        dataKey={useNormalized ? "ProteinPct" : "Protein"}
+                        name="Protein"
+                        stroke={COLORS.protein.solid}
+                        fill="url(#gradProteinLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.protein.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Protein')}
+                      />
+                      <Area
+                        yAxisId={useNormalized ? "left" : "grams"}
+                        type="monotone"
+                        dataKey={useNormalized ? "CarbohydratesPct" : "Carbohydrates"}
+                        name="Carbohydrates"
+                        stroke={COLORS.carbs.solid}
+                        fill="url(#gradCarbsLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.carbs.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Carbohydrates')}
+                      />
+                      <Area
+                        yAxisId={useNormalized ? "left" : "grams"}
+                        type="monotone"
+                        dataKey={useNormalized ? "FatPct" : "Fat"}
+                        name="Fat"
+                        stroke={COLORS.fat.solid}
+                        fill="url(#gradFatLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.fat.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Fat')}
+                      />
+                      <Area
+                        yAxisId={useNormalized ? "left" : "grams"}
+                        type="monotone"
+                        dataKey={useNormalized ? "FiberPct" : "Fiber"}
+                        name="Fiber"
+                        stroke={COLORS.fiber.solid}
+                        fill="url(#gradFiberLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.fiber.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Fiber')}
+                      />
+                      <Area
+                        yAxisId={useNormalized ? "left" : "grams"}
+                        type="monotone"
+                        dataKey={useNormalized ? "SugarPct" : "Sugar"}
+                        name="Sugar"
+                        stroke={COLORS.sugar.solid}
+                        fill="url(#gradSugarLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.sugar.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Sugar')}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-400">No data available</div>
+                )}
               </CardContent>
-              <div className="px-6 pb-6 mt-auto">
-                <InsightBox type={macroInsight.type === 'info' ? 'info' : macroInsight.type} icon={macroInsight.type === 'good' ? CheckCircle2 : Lightbulb}>
-                  {macroInsight.text}
-                </InsightBox>
-              </div>
             </Card>
 
             {/* Micronutrient Trends */}
             <Card className="shadow-sm transition-all duration-300 hover:shadow-md">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {useNormalized ? "Micronutrient & Lipid Trends (% of Limit)" : "Micronutrient & Lipid Trends"}
-                  <TooltipProvider>
-                    <ShadTooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-[200px]">
-                          {useNormalized
-                            ? "Values are normalized to % of daily limits. 100% = Daily Limit."
-                            : "Tracks daily intake in milligrams (mg) or grams (g)."}
-                        </p>
-                      </TooltipContent>
-                    </ShadTooltip>
-                  </TooltipProvider>
-                </CardTitle>
-                <CardDescription>Sodium (2300mg), Chol (300mg), Sat Fat (20g)</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                      {useNormalized ? "Micronutrient & Lipid Trends (% of Limit)" : "Micronutrient & Lipid Trends"}
+                      <TooltipProvider>
+                        <ShadTooltip>
+                          <TooltipTrigger>
+                            <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-[200px]">
+                              {useNormalized
+                                ? "Values are normalized to % of daily limits. 100% = Daily Limit."
+                                : "Tracks daily intake in milligrams (mg) or grams (g)."}
+                            </p>
+                          </TooltipContent>
+                        </ShadTooltip>
+                      </TooltipProvider>
+                    </CardTitle>
+                    <CardDescription>Sodium (2300mg), Chol (300mg), Sat Fat (20g)</CardDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Show micronutrient insight" className="p-2 rounded-full transition-colors bg-blue-100 text-blue-600 hover:bg-blue-200">
+                        <Info className="w-5 h-5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="end">
+                      <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                        <Info className="w-4 h-4 text-blue-500" />
+                        Micronutrient Insight
+                      </div>
+                      <p className="text-sm text-gray-600">High Sodium and Saturated Fat are key risk factors. Keep their trend lines below the reference goals.</p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardHeader>
-              <CardContent className="h-[450px] mt-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={useNormalized ? normalizedTrendData : trendData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis dataKey="date" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} interval={0} tickFormatter={(val, index) => {
-                      if (days <= 7) return val;
-                      if (days <= 30) return index % 3 === 0 ? val : '';
-                      if (days <= 60) return index % 6 === 0 ? val : '';
-                      return index % 14 === 0 ? val : '';
-                    }} />
-                    {/* Y-Axes Logic */}
-                    {useNormalized ? (
-                      <YAxis yAxisId="left" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} unit="%" />
-                    ) : (
-                      <>
-                        <YAxis yAxisId="mg" orientation="left" stroke="#3b82f6" fontSize={12} tickLine={false} axisLine={false} label={{ value: 'mg', angle: -90, position: 'insideLeft', offset: 0, fill: '#3b82f6' }} />
-                        <YAxis yAxisId="g" orientation="right" stroke="#ef4444" fontSize={12} tickLine={false} axisLine={false} label={{ value: 'g', angle: 90, position: 'insideRight', offset: 10, fill: '#ef4444' }} />
-                      </>
-                    )}
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend onClick={toggleVisibility} wrapperStyle={{ cursor: 'pointer', paddingTop: '20px' }} />
-
-                    {useNormalized && <ReferenceLine y={100} yAxisId="left" stroke="#ef4444" strokeDasharray="3 3" label={{ position: 'top', value: 'Limit', fill: '#ef4444', fontSize: 10 }} />}
-
-                    <Line yAxisId={useNormalized ? "left" : "mg"} type="monotone" dataKey={useNormalized ? "SodiumPct" : "Sodium"} name="Sodium" stroke="#3b82f6" strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Sodium')} />
-                    <Line yAxisId={useNormalized ? "left" : "mg"} type="monotone" dataKey={useNormalized ? "CholesterolPct" : "Cholesterol"} name="Cholesterol" stroke="#f97316" strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Cholesterol')} />
-                    <Line yAxisId={useNormalized ? "left" : "g"} type="monotone" dataKey={useNormalized ? "Saturated FatPct" : "Saturated Fat"} name="Saturated Fat" stroke="#ef4444" strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Saturated Fat')} />
-                    <Line yAxisId={useNormalized ? "left" : "g"} type="monotone" dataKey={useNormalized ? "Unsaturated FatPct" : "Unsaturated Fat"} name="Unsaturated Fat" stroke="#22c55e" strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Unsaturated Fat')} />
-                    <Line yAxisId={useNormalized ? "left" : "g"} type="monotone" dataKey={useNormalized ? "Trans-fatPct" : "Trans-fat"} name="Trans-fat" stroke="#78716c" strokeWidth={2} dot={false} hide={hiddenNutrients.includes('Trans-fat')} />
-
-                  </LineChart>
-                </ResponsiveContainer>
+              <CardContent className="h-[500px] mt-4 flex items-center justify-center p-6 pt-0">
+                {hasData ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={useNormalized ? normalizedTrendData : trendData} margin={{ top: 20, right: 35, left: 15, bottom: 25 }}>
+                      <defs>
+                        <linearGradient id="gradSodiumLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.sodium.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.sodium.start} stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="gradCholesterolLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.cholesterol.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.cholesterol.start} stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="gradSatFatLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.satFat.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.satFat.start} stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="gradUnsatFatLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.unsatFat.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.unsatFat.start} stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="gradTransFatLine" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.transFat.start} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={COLORS.transFat.start} stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
+                      <XAxis
+                        dataKey="date"
+                        stroke="#94a3b8"
+                        fontSize={11}
+                        tickLine={false}
+                        axisLine={false}
+                        interval={0}
+                        dy={10}
+                        tick={{ fill: '#64748b' }}
+                        tickFormatter={(val, index) => {
+                          if (days <= 7) return val;
+                          if (days <= 30) return index % 3 === 0 ? val : '';
+                          if (days <= 60) return index % 6 === 0 ? val : '';
+                          return index % 14 === 0 ? val : '';
+                        }}
+                      />
+                      {useNormalized ? (
+                        <YAxis
+                          yAxisId="left"
+                          stroke="#94a3b8"
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          unit="%"
+                          tick={{ fill: '#64748b' }}
+                        />
+                      ) : (
+                        <>
+                          <YAxis
+                            yAxisId="mg"
+                            orientation="left"
+                            stroke={COLORS.sodium.solid}
+                            fontSize={11}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={formatAxisValue}
+                            tick={{ fill: COLORS.sodium.solid }}
+                            label={{ value: 'mg', angle: -90, position: 'insideLeft', offset: 5, fill: COLORS.sodium.solid, fontSize: 12 }}
+                          />
+                          <YAxis
+                            yAxisId="g"
+                            orientation="right"
+                            stroke={COLORS.satFat.solid}
+                            fontSize={11}
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: COLORS.satFat.solid }}
+                            label={{ value: 'g', angle: 90, position: 'insideRight', offset: 10, fill: COLORS.satFat.solid, fontSize: 12 }}
+                          />
+                        </>
+                      )}
+                      <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1', strokeDasharray: '3 3' }} />
+                      <Legend
+                        onClick={toggleVisibility}
+                        wrapperStyle={{ cursor: 'pointer', paddingTop: '15px' }}
+                        iconType="circle"
+                        iconSize={10}
+                      />
+                      {useNormalized && <ReferenceLine y={100} yAxisId="left" stroke={COLORS.danger} strokeDasharray="5 5" strokeWidth={2} label={{ position: 'right', value: 'Limit', fill: COLORS.danger, fontSize: 11, fontWeight: 500 }} />}
+                      <Area
+                        yAxisId={useNormalized ? "left" : "mg"}
+                        type="monotone"
+                        dataKey={useNormalized ? "SodiumPct" : "Sodium"}
+                        name="Sodium"
+                        stroke={COLORS.sodium.solid}
+                        fill="url(#gradSodiumLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.sodium.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Sodium')}
+                      />
+                      <Area
+                        yAxisId={useNormalized ? "left" : "mg"}
+                        type="monotone"
+                        dataKey={useNormalized ? "CholesterolPct" : "Cholesterol"}
+                        name="Cholesterol"
+                        stroke={COLORS.cholesterol.solid}
+                        fill="url(#gradCholesterolLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.cholesterol.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Cholesterol')}
+                      />
+                      <Area
+                        yAxisId={useNormalized ? "left" : "g"}
+                        type="monotone"
+                        dataKey={useNormalized ? "Saturated FatPct" : "Saturated Fat"}
+                        name="Saturated Fat"
+                        stroke={COLORS.satFat.solid}
+                        fill="url(#gradSatFatLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.satFat.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Saturated Fat')}
+                      />
+                      <Area
+                        yAxisId={useNormalized ? "left" : "g"}
+                        type="monotone"
+                        dataKey={useNormalized ? "Unsaturated FatPct" : "Unsaturated Fat"}
+                        name="Unsaturated Fat"
+                        stroke={COLORS.unsatFat.solid}
+                        fill="url(#gradUnsatFatLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.unsatFat.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Unsaturated Fat')}
+                      />
+                      <Area
+                        yAxisId={useNormalized ? "left" : "g"}
+                        type="monotone"
+                        dataKey={useNormalized ? "Trans-fatPct" : "Trans-fat"}
+                        name="Trans-fat"
+                        stroke={COLORS.transFat.solid}
+                        fill="url(#gradTransFatLine)"
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 5, fill: COLORS.transFat.start, stroke: '#fff', strokeWidth: 2 }}
+                        hide={hiddenNutrients.includes('Trans-fat')}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-400">No data available</div>
+                )}
               </CardContent>
             </Card>
 
             {/* Calorie Composition & Analysis */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-4 mt-4">
               <Card className="shadow-sm transition-all duration-300 hover:shadow-md">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Calorie Composition
-                    <TooltipProvider>
-                      <ShadTooltip>
-                        <TooltipTrigger>
-                          <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="max-w-[200px]">Your average macronutrient split compared to the recommended 30% Protein, 40% Carbohydrates, 30% Fat target.</p>
-                        </TooltipContent>
-                      </ShadTooltip>
-                    </TooltipProvider>
-                  </CardTitle>
-                  <CardDescription>Target: 30P / 40C / 30F</CardDescription>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <CardTitle className="flex items-center gap-2">
+                        Calorie Composition
+                        <TooltipProvider>
+                          <ShadTooltip>
+                            <TooltipTrigger>
+                              <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-[200px]">Your average macronutrient split compared to the recommended 30% Protein, 40% Carbohydrates, 30% Fat target.</p>
+                            </TooltipContent>
+                          </ShadTooltip>
+                        </TooltipProvider>
+                      </CardTitle>
+                      <CardDescription>Target: 30P / 40C / 30F</CardDescription>
+                    </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button type="button" aria-label="Show composition insight" className="p-2 rounded-full transition-colors bg-blue-100 text-blue-600 hover:bg-blue-200">
+                          <Info className="w-5 h-5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80 p-4" align="end">
+                        <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                          <Info className="w-4 h-4 text-blue-600" />
+                          Composition Insight
+                        </div>
+                        <p className="text-sm text-gray-600">This chart compares your actual macronutrient ratio against the recommended 30/40/30 split.</p>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </CardHeader>
-                <CardContent className="min-h-[400px] flex flex-col items-center justify-center">
+                <CardContent className="min-h-[400px] flex flex-col items-center justify-between p-6">
                   <div className="h-[250px] w-full max-w-[300px] relative">
                     <ResponsiveContainer width="100%" height="100%">
                       <RadialBarChart
@@ -1011,9 +1427,9 @@ export default function AnalyticsPage() {
                       >
                         <RadialBar
                           label={{ position: 'insideStart', fill: '#fff', fontSize: 10, fontWeight: 'bold' }}
-                          background
+                          background={{ fill: '#f1f5f9' }}
                           dataKey="value"
-                          cornerRadius={10}
+                          cornerRadius={50}
                         />
                         <Tooltip
                           wrapperStyle={{ zIndex: 1000 }}
@@ -1042,7 +1458,7 @@ export default function AnalyticsPage() {
                     {/* Center Text */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="text-center">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Total</span>
+                        <span className="text-xs text-muted-foreground uppercase tracking-widest">Total</span>
                         <div className="text-lg font-bold text-gray-800">{advancedStats?.avg_daily_intake || 0}</div>
                         <span className="text-[9px] text-gray-500">kcal</span>
                       </div>
@@ -1055,7 +1471,7 @@ export default function AnalyticsPage() {
                         <div className="w-2 h-2 rounded-full mb-2" style={{ backgroundColor: m.color }} />
                         <span className="text-xs font-semibold text-gray-600 mb-0.5">{m.name}</span>
                         <span className="text-lg font-bold" style={{ color: m.color }}>{m.value}%</span>
-                        <span className="text-[10px] text-gray-400">{Math.round(m.kcal)} kcal</span>
+                        <span className="text-xs text-gray-400">{Math.round(m.kcal)} kcal</span>
                       </div>
                     ))}
                   </div>
@@ -1065,44 +1481,98 @@ export default function AnalyticsPage() {
               {/* Pattern Analysis (Scatter Plot) */}
               <Card className="shadow-sm transition-all duration-300 hover:shadow-md">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Dietary Pattern Matrix
-                    <TooltipProvider>
-                      <ShadTooltip>
-                        <TooltipTrigger>
-                          <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="max-w-[200px]">Analyzes your eating patterns. <br />
-                            <b>Top-Right:</b> High Carb & Fat (Cheat Days)<br />
-                            <b>Center:</b> Balanced<br />
-                            <b>Top-Left:</b> Keto/Low Carb</p>
-                        </TooltipContent>
-                      </ShadTooltip>
-                    </TooltipProvider>
-                  </CardTitle>
-                  <CardDescription>Carbohydrate vs. Fat Correlation</CardDescription>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <CardTitle className="flex items-center gap-2">
+                        Dietary Pattern Matrix
+                        <TooltipProvider>
+                          <ShadTooltip>
+                            <TooltipTrigger>
+                              <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-[200px]">Analyzes your eating patterns. <br />
+                                <b>Top-Right:</b> High Carb & Fat (Cheat Days)<br />
+                                <b>Center:</b> Balanced<br />
+                                <b>Top-Left:</b> Keto/Low Carb</p>
+                            </TooltipContent>
+                          </ShadTooltip>
+                        </TooltipProvider>
+                      </CardTitle>
+                      <CardDescription>Carbohydrate vs. Fat Correlation</CardDescription>
+                    </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button type="button" aria-label="Show nutrition pattern insight" className="p-2 rounded-full transition-colors bg-blue-100 text-blue-600 hover:bg-blue-200">
+                          <Info className="w-5 h-5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80 p-4" align="end">
+                        <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                          <Info className="w-4 h-4 text-blue-500" />
+                          Pattern Insight
+                        </div>
+                        <p className="text-sm text-gray-600">This scatter plot reveals your eating habits. Aim for the "Balanced" (Green) zone in the center.</p>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </CardHeader>
-                <CardContent className="min-h-[400px] flex flex-col p-6">
+                <CardContent className="h-[400px] flex flex-col p-6">
                   <div className="h-[350px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                        <XAxis type="number" dataKey="x" name="Carbs" unit="g" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} label={{ value: 'Carbs (g)', position: 'insideBottom', offset: -10, fill: '#9CA3AF', fontSize: 12 }} />
-                        <YAxis type="number" dataKey="y" name="Fat" unit="g" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} label={{ value: 'Fat (g)', angle: -90, position: 'insideLeft', fill: '#9CA3AF', fontSize: 12 }} />
-                        <ZAxis type="number" dataKey="z" range={[60, 400]} name="Calories" unit="kcal" />
+                      <ScatterChart margin={{ top: 20, right: 30, bottom: 25, left: 10 }}>
+                        <defs>
+                          <linearGradient id="scatterGradBalanced" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor={COLORS.good} stopOpacity={0.9} />
+                            <stop offset="100%" stopColor="#059669" stopOpacity={1} />
+                          </linearGradient>
+                          <linearGradient id="scatterGradWarning" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor={COLORS.warning} stopOpacity={0.9} />
+                            <stop offset="100%" stopColor="#d97706" stopOpacity={1} />
+                          </linearGradient>
+                          <linearGradient id="scatterGradDanger" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor={COLORS.danger} stopOpacity={0.9} />
+                            <stop offset="100%" stopColor="#dc2626" stopOpacity={1} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" opacity={0.5} />
+                        <XAxis
+                          type="number"
+                          dataKey="x"
+                          name="Carbs"
+                          unit="g"
+                          stroke="#94a3b8"
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: '#64748b' }}
+                          label={{ value: 'Carbs (g)', position: 'insideBottom', offset: -10, fill: COLORS.carbs.solid, fontSize: 12 }}
+                        />
+                        <YAxis
+                          type="number"
+                          dataKey="y"
+                          name="Fat"
+                          unit="g"
+                          stroke="#94a3b8"
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: '#64748b' }}
+                          label={{ value: 'Fat (g)', angle: -90, position: 'insideLeft', fill: COLORS.fat.solid, fontSize: 12 }}
+                        />
+                        <ZAxis type="number" dataKey="z" range={[80, 400]} name="Calories" unit="kcal" />
                         <Tooltip
-                          cursor={{ strokeDasharray: '3 3' }}
+                          cursor={{ strokeDasharray: '3 3', stroke: '#cbd5e1' }}
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                               const data = payload[0].payload;
                               return (
-                                <div className="bg-white p-3 border border-gray-100 shadow-xl rounded-xl min-w-[150px]">
-                                  <p className="font-bold text-gray-800 mb-1">{data.date}</p>
-                                  <div className="space-y-1 text-xs">
-                                    <div className="flex justify-between"><span className="text-gray-500">Calories:</span> <span className="font-semibold">{data.z}</span></div>
-                                    <div className="flex justify-between"><span className="text-amber-500">Carbs:</span> <span className="font-semibold">{data.x}g</span></div>
-                                    <div className="flex justify-between"><span className="text-coral-500">Fat:</span> <span className="font-semibold">{data.y}g</span></div>
+                                <div className="bg-white/95 backdrop-blur-sm p-4 border border-gray-100 shadow-xl rounded-xl min-w-[160px]">
+                                  <p className="font-bold text-gray-800 mb-2">{data.date}</p>
+                                  <div className="space-y-1.5 text-xs">
+                                    <div className="flex justify-between gap-3"><span className="text-gray-500">Calories:</span> <span className="font-semibold text-gray-800">{data.z} kcal</span></div>
+                                    <div className="flex justify-between gap-3"><span style={{ color: COLORS.carbs.solid }}>Carbs:</span> <span className="font-semibold">{data.x}g</span></div>
+                                    <div className="flex justify-between gap-3"><span style={{ color: COLORS.fat.solid }}>Fat:</span> <span className="font-semibold">{data.y}g</span></div>
                                   </div>
                                 </div>
                               );
@@ -1110,21 +1580,21 @@ export default function AnalyticsPage() {
                             return null;
                           }}
                         />
-                        <ReferenceLine x={t.carbs} stroke={COLORS.amber.end} strokeDasharray="3 3" label={{ value: 'Target Carbs', position: 'insideTopRight', fill: COLORS.amber.end, fontSize: 10 }} />
-                        <ReferenceLine y={t.fat} stroke={COLORS.coral.end} strokeDasharray="3 3" label={{ value: 'Target Fat', position: 'insideTopRight', fill: COLORS.coral.end, fontSize: 10 }} />
+                        <ReferenceLine x={t.carbs} stroke={COLORS.carbs.solid} strokeDasharray="5 5" strokeWidth={1.5} label={{ value: 'Target Carbs', position: 'insideTopRight', fill: COLORS.carbs.solid, fontSize: 10, fontWeight: 500 }} />
+                        <ReferenceLine y={t.fat} stroke={COLORS.fat.solid} strokeDasharray="5 5" strokeWidth={1.5} label={{ value: 'Target Fat', position: 'insideTopRight', fill: COLORS.fat.solid, fontSize: 10, fontWeight: 500 }} />
                         <Scatter name="Daily Intake" data={history.map(h => ({
                           x: h.total_carbohydrates,
                           y: h.total_fat,
                           z: h.total_calories,
                           date: new Date(h.date).toLocaleDateString(),
-                          fill: (h.total_carbohydrates > t.carbs * 1.2 && h.total_fat > t.fat * 1.2) ? '#ef4444' : // High Both (Danger)
-                            (h.total_carbohydrates < t.carbs * 0.8 && h.total_fat > t.fat * 1.2) ? '#f59e0b' : // Ketoish
-                              '#10b981' // Balanced/Other
+                          fill: (h.total_carbohydrates > t.carbs * 1.2 && h.total_fat > t.fat * 1.2) ? COLORS.danger :
+                            (h.total_carbohydrates < t.carbs * 0.8 && h.total_fat > t.fat * 1.2) ? COLORS.warning :
+                              COLORS.good
                         }))}>
                           {history.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
-                              fill={(entry.total_carbohydrates > t.carbs * 1.2 && entry.total_fat > t.fat * 1.2) ? '#ef4444' : (entry.total_carbohydrates < t.carbs * 0.8 && entry.total_fat > t.fat * 1.2) ? '#f59e0b' : '#10b981'}
+                              fill={(entry.total_carbohydrates > t.carbs * 1.2 && entry.total_fat > t.fat * 1.2) ? COLORS.danger : (entry.total_carbohydrates < t.carbs * 0.8 && entry.total_fat > t.fat * 1.2) ? COLORS.warning : COLORS.good}
                               stroke="#ffffff"
                               strokeWidth={2}
                             />
@@ -1137,15 +1607,15 @@ export default function AnalyticsPage() {
                   {/* Custom Legend */}
                   <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 mt-4 text-xs text-gray-600 w-full">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <div className="w-3 h-3 rounded-full bg-emerald-500 border-2 border-white shadow-sm flex-shrink-0"></div>
+                      <div className="w-3 h-3 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: COLORS.good }}></div>
                       <span>Balanced</span>
                     </div>
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <div className="w-3 h-3 rounded-full bg-amber-500 border-2 border-white shadow-sm flex-shrink-0"></div>
+                      <div className="w-3 h-3 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: COLORS.warning }}></div>
                       <span>Imbalanced</span>
                     </div>
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-white shadow-sm flex-shrink-0"></div>
+                      <div className="w-3 h-3 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: COLORS.danger }}></div>
                       <span>Excess (High Carb+Fat)</span>
                     </div>
                   </div>
@@ -1156,7 +1626,7 @@ export default function AnalyticsPage() {
         </section>
 
         {/* Section 4: Fat Quality & Section 5: Glycemic Control */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-4">
           {/* Fat Quality */}
           <section>
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
@@ -1164,56 +1634,87 @@ export default function AnalyticsPage() {
             </h2>
             <Card className="shadow-sm h-full transition-all duration-300 hover:shadow-md flex flex-col">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Lipid Breakdown
-                  <TooltipProvider>
-                    <ShadTooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-[200px]">Breakdown of fat types. Unsaturated fats are healthy; Saturated and Trans-fats should be limited.</p>
-                      </TooltipContent>
-                    </ShadTooltip>
-                  </TooltipProvider>
-                </CardTitle>
-                <CardDescription>Healthy vs unhealthy fat sources</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                      Lipid Breakdown
+                      <TooltipProvider>
+                        <ShadTooltip>
+                          <TooltipTrigger><Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" /></TooltipTrigger>
+                          <TooltipContent><p className="max-w-[200px]">Breakdown of fat types. Unsaturated fats are healthy; Saturated and Trans-fats should be limited.</p></TooltipContent>
+                        </ShadTooltip>
+                      </TooltipProvider>
+                    </CardTitle>
+                    <CardDescription>Healthy vs unhealthy fat sources</CardDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Show fat quality insight" className={cn("p-2 rounded-full transition-colors", fatInsight.type === 'good' ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' : fatInsight.type === 'warning' ? 'bg-amber-100 text-amber-600 hover:bg-amber-200' : 'bg-red-100 text-red-600 hover:bg-red-200')}>
+                        <Info className="w-5 h-5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="end">
+                      <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                        <Info className={cn("w-4 h-4", fatInsight.type === 'good' ? "text-emerald-600" : fatInsight.type === 'warning' ? "text-amber-600" : "text-red-600")} />
+                        {fatInsight.type} Insight
+                      </div>
+                      <p className="text-sm text-gray-600">{fatInsight.text}</p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardHeader>
-              <CardContent className="flex items-center gap-10 p-8 flex-1">
-                <div className="h-[200px] w-[200px] flex-shrink-0">
+              <CardContent className="flex flex-col items-center gap-8 p-6 min-h-[300px]">
+                {/* Donut Chart */}
+                <div className="h-[200px] w-[200px] relative flex-shrink-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={fatData} innerRadius={55} outerRadius={75} dataKey="value" paddingAngle={3}>
-                        <Cell fill={COLORS.coral.start} />{/* Sat */}
-                        <Cell fill={COLORS.emerald.start} />{/* Unsat */}
-                        <Cell fill="#1e293b" />{/* Trans */}
+                      <Pie
+                        data={fatData}
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={4}
+                        dataKey="value"
+                        cornerRadius={6}
+                      >
+                        <Cell fill={COLORS.satFat.start} />
+                        <Cell fill={COLORS.unsatFat.start} />
+                        <Cell fill={COLORS.cholesterol.start} />
                       </Pie>
                       <Tooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
+                  {/* Center Text */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="text-center">
+                      <span className="text-xs text-muted-foreground uppercase tracking-widest">Total</span>
+                      <div className="text-xl font-bold text-gray-800">{totalFat.toFixed(1)}</div>
+                      <span className="text-xs text-gray-500">grams</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-4 w-full">
-                  {fatData.map((d, i) => (
-                    <div key={d.name}>
-                      <div className="flex justify-between text-sm mb-1.5">
-                        <span className="font-medium text-gray-700">{d.name}</span>
-                        <span className="text-gray-500">{d.value.toFixed(1)}g ({totalFat > 0 ? ((d.value / totalFat) * 100).toFixed(0) : 0}%)</span>
-                      </div>
-                      <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{
-                          width: `${(d.value / (totalFat || 1)) * 100}%`,
-                          backgroundColor: i === 0 ? COLORS.coral.start : i === 1 ? COLORS.emerald.start : '#1e293b'
-                        }} />
-                      </div>
+
+                {/* Detail Cards */}
+                <div className="flex-1 w-full grid grid-cols-3 gap-3">
+                  {[
+                    { name: 'Saturated Fat', value: fatData[0].value, color: COLORS.satFat.start, bg: COLORS.satFat.end },
+                    { name: 'Unsaturated Fat', value: fatData[1].value, color: COLORS.unsatFat.start, bg: COLORS.unsatFat.end },
+                    { name: 'Trans-fat', value: fatData[2].value, color: COLORS.cholesterol.start, bg: COLORS.cholesterol.end },
+                  ].map((item) => (
+                    <div
+                      key={item.name}
+                      className="flex flex-col items-center p-3 rounded-xl bg-gray-50/50 border border-gray-100"
+                    >
+                      <div className="w-2 h-2 rounded-full mb-2" style={{ backgroundColor: item.color }} />
+                      <span className="text-xs font-semibold text-center text-gray-600 mb-0.5">{item.name}</span>
+                      <span className="text-lg font-bold" style={{ color: item.color }}>
+                        {totalFat > 0 ? Math.round((item.value / totalFat) * 100) : 0}%
+                      </span>
+                      <span className="text-xs text-gray-400">{item.value.toFixed(1)}g</span>
                     </div>
                   ))}
                 </div>
               </CardContent>
-              <div className="px-8 pb-8 mt-auto">
-                <InsightBox type={fatInsight.type} icon={fatInsight.type === 'good' ? CheckCircle2 : fatInsight.type === 'warning' ? AlertTriangle : Lightbulb}>
-                  {fatInsight.text}
-                </InsightBox>
-              </div>
+
             </Card>
           </section>
 
@@ -1224,72 +1725,143 @@ export default function AnalyticsPage() {
             </h2>
             <Card className="shadow-sm h-full transition-all duration-300 hover:shadow-md flex flex-col">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Sugar vs Fiber
-                  <TooltipProvider>
-                    <ShadTooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-[200px]">Visualizes the balance between Sugar (spikes blood glucose) and Fiber (stabilizes it).</p>
-                      </TooltipContent>
-                    </ShadTooltip>
-                  </TooltipProvider>
-                </CardTitle>
-                <CardDescription>Balance for blood sugar stability</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                      Sugar vs Fiber
+                      <TooltipProvider>
+                        <ShadTooltip>
+                          <TooltipTrigger><Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" /></TooltipTrigger>
+                          <TooltipContent><p className="max-w-[200px]">Visualizes the balance between Sugar (spikes blood glucose) and Fiber (stabilizes it).</p></TooltipContent>
+                        </ShadTooltip>
+                      </TooltipProvider>
+                    </CardTitle>
+                    <CardDescription>Balance for blood sugar stability</CardDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Show glycemic balance insight" className={cn("p-2 rounded-full transition-colors", glycemicInsight.type === 'good' ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' : 'bg-blue-100 text-blue-600 hover:bg-blue-200')}>
+                        <Info className="w-5 h-5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="end">
+                      <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                        <Info className={cn("w-4 h-4", glycemicInsight.type === 'good' ? "text-emerald-500" : "text-blue-500")} />
+                        {glycemicInsight.type} Insight
+                      </div>
+                      <p className="text-sm text-gray-600">{glycemicInsight.text}</p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardHeader>
-              <CardContent className="h-[350px] mt-4 flex-1">
+              <CardContent className="h-[450px] mt-4 flex-1 p-6 pt-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis dataKey="date" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} interval={0} tickFormatter={(val, index) => {
-                      if (days <= 7) return val;
-                      if (days <= 30) return index % 3 === 0 ? val : '';
-                      if (days <= 60) return index % 6 === 0 ? val : '';
-                      return index % 14 === 0 ? val : '';
-                    }} />
-                    <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: '#fce7f3', opacity: 0.5 }} />
-                    <Legend />
-                    <Bar dataKey="Sugar" fill={COLORS.rose.start} radius={[6, 6, 0, 0]} name="Sugar (g)" />
-                    <Bar dataKey="Fiber" fill={COLORS.violet.start} radius={[6, 6, 0, 0]} name="Fiber (g)" />
+                  <BarChart data={trendData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
+                    <defs>
+                      <linearGradient id="gradSugarBar" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={COLORS.sugar.start} stopOpacity={0.95} />
+                        <stop offset="100%" stopColor={COLORS.sugar.end} stopOpacity={0.85} />
+                      </linearGradient>
+                      <linearGradient id="gradFiberBar" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={COLORS.fiber.start} stopOpacity={0.95} />
+                        <stop offset="100%" stopColor={COLORS.fiber.end} stopOpacity={0.85} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
+                    <XAxis
+                      dataKey="date"
+                      stroke="#94a3b8"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      interval={0}
+                      dy={10}
+                      tick={{ fill: '#64748b' }}
+                      tickFormatter={(val, index) => {
+                        if (days <= 7) return val;
+                        if (days <= 30) return index % 3 === 0 ? val : '';
+                        if (days <= 60) return index % 6 === 0 ? val : '';
+                        return index % 14 === 0 ? val : '';
+                      }}
+                    />
+                    <YAxis
+                      stroke="#94a3b8"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#64748b' }}
+                      label={{ value: 'Grams', angle: -90, position: 'insideLeft', offset: 15, fill: '#64748b', fontSize: 12 }}
+                    />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9', opacity: 0.4 }} />
+                    <Legend
+                      iconType="circle"
+                      iconSize={10}
+                      wrapperStyle={{ paddingTop: '15px' }}
+                    />
+                    <Bar
+                      dataKey="Sugar"
+                      fill="url(#gradSugarBar)"
+                      radius={50}
+                      name="Sugar (g)"
+                      maxBarSize={36}
+                    />
+                    <Bar
+                      dataKey="Fiber"
+                      fill="url(#gradFiberBar)"
+                      radius={50}
+                      name="Fiber (g)"
+                      maxBarSize={36}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
-              <div className="px-8 pb-8 mt-auto">
-                <InsightBox type={glycemicInsight.type} icon={glycemicInsight.type === 'good' ? CheckCircle2 : Lightbulb}>
-                  {glycemicInsight.text}
-                </InsightBox>
-              </div>
+
             </Card>
           </section>
         </div>
 
         {/* Section 6: Heart Health */}
-        <section className='mt-24'>
+        <section className="mt-24">
           <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
             <Heart className="w-6 h-6 text-red-500" /> Cardiovascular Health
           </h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 pl-1 pr-1">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-4 pl-1 pr-1">
             {/* 1. Risk Assessment */}
             <Card className="shadow-sm transition-all duration-300 hover:shadow-md">
               <CardHeader className="p-6">
-                <CardTitle className="text-lg font-bold flex items-center gap-2">
-                  Risk Assessment
-                  <TooltipProvider>
-                    <ShadTooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-[200px]">Radar chart showing key heart health metrics relative to their recommended daily limits (100%).</p>
-                      </TooltipContent>
-                    </ShadTooltip>
-                  </TooltipProvider>
-                </CardTitle>
-                <CardDescription>Key nutrients vs daily limits</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      Risk Assessment
+                      <TooltipProvider>
+                        <ShadTooltip>
+                          <TooltipTrigger>
+                            <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-[200px]">Radar chart showing key heart health metrics relative to their recommended daily limits (100%).</p>
+                          </TooltipContent>
+                        </ShadTooltip>
+                      </TooltipProvider>
+                    </CardTitle>
+                    <CardDescription>Key nutrients vs daily limits</CardDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Show heart health insight" className={cn("p-2 rounded-full transition-colors", heartInsight.type === 'good' ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' : 'bg-amber-100 text-amber-600 hover:bg-amber-200')}>
+                        <Info className="w-5 h-5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="end">
+                      <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                        <Info className={cn("w-4 h-4", heartInsight.type === 'good' ? "text-emerald-500" : "text-amber-500")} />
+                        {heartInsight.type} Insight
+                      </div>
+                      <p className="text-sm text-gray-600">{heartInsight.text}</p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardHeader>
               <CardContent className="h-[350px] p-4">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1308,67 +1880,94 @@ export default function AnalyticsPage() {
                   </RadarChart>
                 </ResponsiveContainer>
               </CardContent>
-              <div className="px-6 pb-6 mt-auto">
-                <InsightBox type={heartInsight.type} icon={heartInsight.type === 'good' ? Heart : AlertTriangle}>
-                  {heartInsight.text}
-                </InsightBox>
-              </div>
             </Card>
 
             {/* 2. Metabolic Matrix (Carb vs Fat Patterns) */}
             <Card className="shadow-sm transition-all duration-300 hover:shadow-md">
               <CardHeader className="p-6">
-                <CardTitle className="text-lg font-bold flex items-center gap-2">
-                  Metabolic Matrix
-                  <TooltipProvider>
-                    <ShadTooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-[200px]">Analyzes your diet patterns. Top-right (High Carb + High Fat) is the 'Danger Zone'. Aim for the center or bottom-left.</p>
-                      </TooltipContent>
-                    </ShadTooltip>
-                  </TooltipProvider>
-                </CardTitle>
-                <CardDescription>Carbohydrate vs. Fat Balance per Day</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      Metabolic Matrix
+                      <TooltipProvider>
+                        <ShadTooltip>
+                          <TooltipTrigger>
+                            <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-[200px]">Analyzes your diet patterns. Top-right (High Carb + High Fat) is the 'Danger Zone'. Aim for the center or bottom-left.</p>
+                          </TooltipContent>
+                        </ShadTooltip>
+                      </TooltipProvider>
+                    </CardTitle>
+                    <CardDescription>Carbohydrate vs. Fat Balance per Day</CardDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Show metabolic insight" className="p-2 rounded-full transition-colors bg-blue-100 text-blue-600 hover:bg-blue-200">
+                        <Info className="w-5 h-5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="end">
+                      <div className="font-semibold mb-1 capitalize flex items-center gap-2">
+                        <Info className="w-4 h-4 text-blue-500" />
+                        Metabolic Insight
+                      </div>
+                      <p className="text-sm text-gray-600">Larger circles represent higher calorie days. Clusters in the top-right indicate heavy meals.</p>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardHeader>
-              <CardContent className="h-[350px] p-2">
+              <CardContent className="h-[350px] p-4">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <ScatterChart margin={{ top: 20, right: 30, bottom: 25, left: 20 }}>
+                    <defs>
+                      <linearGradient id="metabolicGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor={COLORS.info} stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#1d4ed8" stopOpacity={1} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" opacity={0.5} />
                     <XAxis
                       type="number"
                       dataKey="total_carbohydrates"
                       name="Carbs"
                       unit="g"
-                      label={{ value: 'Carbohydrates (g)', position: 'bottom', offset: 0, fontSize: 12 }}
-                      tick={{ fontSize: 11 }}
+                      stroke="#94a3b8"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#64748b' }}
+                      label={{ value: 'Carbohydrates (g)', position: 'bottom', offset: 0, fontSize: 12, fill: COLORS.carbs.solid }}
                     />
                     <YAxis
                       type="number"
                       dataKey="total_fat"
                       name="Fat"
                       unit="g"
-                      label={{ value: 'Fat (g)', angle: -90, position: 'left', offset: 0, fontSize: 12 }}
-                      tick={{ fontSize: 11 }}
+                      stroke="#94a3b8"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#64748b' }}
+                      label={{ value: 'Fat (g)', angle: -90, position: 'left', offset: 0, fontSize: 12, fill: COLORS.fat.solid }}
                     />
-                    <ZAxis type="number" dataKey="total_calories" range={[60, 400]} name="Calories" unit="kcal" />
+                    <ZAxis type="number" dataKey="total_calories" range={[80, 400]} name="Calories" unit="kcal" />
                     <Tooltip
-                      cursor={{ strokeDasharray: '3 3' }}
+                      cursor={{ strokeDasharray: '3 3', stroke: '#cbd5e1' }}
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload;
                           return (
-                            <div className="bg-white p-3 border rounded-lg shadow-lg text-xs">
-                              <p className="font-bold mb-1">{format(new Date(data.date), 'MMM dd, yyyy')}</p>
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            <div className="bg-white/95 backdrop-blur-sm p-4 border border-gray-100 shadow-xl rounded-xl text-xs min-w-[160px]">
+                              <p className="font-bold text-gray-800 mb-2">{format(new Date(data.date), 'MMM dd, yyyy')}</p>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                                 <span className="text-gray-500">Carbs:</span>
-                                <span className="font-medium">{data.total_carbohydrates}g</span>
+                                <span className="font-medium" style={{ color: COLORS.carbs.solid }}>{data.total_carbohydrates}g</span>
                                 <span className="text-gray-500">Fat:</span>
-                                <span className="font-medium">{data.total_fat}g</span>
+                                <span className="font-medium" style={{ color: COLORS.fat.solid }}>{data.total_fat}g</span>
                                 <span className="text-gray-500">Calories:</span>
-                                <span className="font-medium">{data.total_calories}</span>
+                                <span className="font-medium text-gray-800">{data.total_calories} kcal</span>
                               </div>
                             </div>
                           );
@@ -1377,18 +1976,13 @@ export default function AnalyticsPage() {
                       }}
                     />
                     {/* Reference Lines for Targets */}
-                    <ReferenceLine x={t?.carbs || 275} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Target Carbs', position: 'insideTopRight', fontSize: 10, fill: '#059669' }} />
-                    <ReferenceLine y={t?.fat || 78} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Target Fat', position: 'insideRight', fontSize: 10, fill: '#059669' }} />
+                    <ReferenceLine x={t?.carbs || 275} stroke={COLORS.good} strokeDasharray="5 5" strokeWidth={1.5} label={{ value: 'Target Carbs', position: 'insideTopRight', fontSize: 10, fill: COLORS.good, fontWeight: 500 }} />
+                    <ReferenceLine y={t?.fat || 78} stroke={COLORS.good} strokeDasharray="5 5" strokeWidth={1.5} label={{ value: 'Target Fat', position: 'insideRight', fontSize: 10, fill: COLORS.good, fontWeight: 500 }} />
 
-                    <Scatter name="Daily Log" data={history} fill={COLORS.blue.start} shape="circle" />
+                    <Scatter name="Daily Log" data={history} fill={COLORS.info} shape="circle" />
                   </ScatterChart>
                 </ResponsiveContainer>
               </CardContent>
-              <div className="px-6 pb-6 mt-auto">
-                <InsightBox type="info" icon={Brain}>
-                  Larger circles represent higher calorie days. Clusters in the top-right indicate heavy meals.
-                </InsightBox>
-              </div>
             </Card>
           </div>
 
@@ -1403,8 +1997,8 @@ export default function AnalyticsPage() {
               (Over last {days} days)
             </span>
           </h2>
-          <Card className="shadow-none border-none bg-transparent">
-            <CardContent className="p-4 bg-transparent shadow-none">
+          <Card className="shadow-none border-none">
+            <CardContent className="p-4 shadow-none">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {[
                   // 1. Metabolic Essentials
@@ -1420,22 +2014,30 @@ export default function AnalyticsPage() {
                   let defaultUnit = 'g';
                   let isMinimum = false;
 
+                  // Clean up redundant logic
                   if (n.name === 'Calories') { defaultLimit = t.calories; defaultUnit = 'kcal'; isMinimum = false; }
                   else if (n.name === 'Protein') { defaultLimit = t.protein; isMinimum = true; }
                   else if (n.name === 'Fiber') { defaultLimit = t.fiber; isMinimum = true; }
                   else if (n.name === 'Carbohydrates') { defaultLimit = t.carbs; isMinimum = false; }
-
-                  if (n.name === 'Calories') { defaultLimit = t.calories; defaultUnit = 'kcal'; }
-                  else if (n.name === 'Protein') { defaultLimit = t.protein; }
-                  else if (n.name === 'Fiber') { defaultLimit = t.fiber; }
-                  else if (n.name === 'Carbohydrates') { defaultLimit = t.carbs; }
-                  else if (n.name === 'Fat') { defaultLimit = t.fat; }
+                  else if (n.name === 'Fat') { defaultLimit = t.fat; isMinimum = false; }
+                  else if (n.name === 'Sugar') isMinimum = false;
+                  else if (n.name === 'Sodium') isMinimum = false;
+                  else if (['Iron', 'Calcium', 'Vitamin D', 'Potassium'].includes(n.name)) isMinimum = true;
 
                   // For micro/limiting nutrients, pull from stats or fallbacks
                   if (!defaultLimit && stats?.nutrient_limits?.[n.name]) {
                     defaultLimit = stats.nutrient_limits[n.name].daily;
                     defaultUnit = stats.nutrient_limits[n.name].unit || 'g';
                   }
+
+                  // Specific defaults if not in limits
+                  if (!defaultLimit && n.name === 'Sodium') { defaultLimit = 2300; defaultUnit = 'mg'; }
+                  if (!defaultLimit && n.name === 'Cholesterol') { defaultLimit = 300; defaultUnit = 'mg'; }
+                  if (!defaultLimit && n.name === 'Saturated Fat') { defaultLimit = 22; defaultUnit = 'g'; }
+                  if (!defaultLimit && n.name === 'Iron') { defaultLimit = 18; defaultUnit = 'mg'; }
+                  if (!defaultLimit && n.name === 'Calcium') { defaultLimit = 1000; defaultUnit = 'mg'; }
+                  if (!defaultLimit && n.name === 'Vitamin D') { defaultLimit = 600; defaultUnit = 'IU'; }
+                  if (!defaultLimit && n.name === 'Potassium') { defaultLimit = 3500; defaultUnit = 'mg'; }
 
                   // Manual fallbacks if API missing
                   if (!defaultLimit) {
@@ -1461,14 +2063,14 @@ export default function AnalyticsPage() {
                     else if (ratio < 0.9) { statusColor = 'bg-blue-500'; textColor = 'text-blue-700'; bgColor = 'bg-blue-50'; statusText = 'Under'; }
                     else { statusColor = 'bg-amber-500'; textColor = 'text-amber-700'; bgColor = 'bg-amber-50'; statusText = 'Over'; }
                   }
-                  else if (['Sugar', 'Sodium', 'Saturated Fat', 'Trans-fat', 'Cholesterol'].includes(n.name)) {
-                    // Limit logic (Lower is better)
+                  else if (!isMinimum) {
+                    // Maximum Limit (Lower is better) - e.g. Sodium, Sugar, Sat Fat
                     if (avg > limit) { statusColor = 'bg-red-500'; textColor = 'text-red-700'; bgColor = 'bg-red-50'; statusText = 'Excess'; }
                     else if (avg > limit * 0.8) { statusColor = 'bg-amber-500'; textColor = 'text-amber-700'; bgColor = 'bg-amber-50'; statusText = 'High'; }
                     else { statusColor = 'bg-emerald-500'; textColor = 'text-emerald-700'; bgColor = 'bg-emerald-50'; statusText = 'Good'; }
                   }
                   else {
-                    // Target logic (Higher is better, up to a point)
+                    // Minimum Target (Higher is better) - e.g. Protein, Fiber, Vitamins
                     if (avg < limit * 0.7) { statusColor = 'bg-red-500'; textColor = 'text-red-700'; bgColor = 'bg-red-50'; statusText = 'Low'; }
                     else if (avg < limit * 0.9) { statusColor = 'bg-amber-500'; textColor = 'text-amber-700'; bgColor = 'bg-amber-50'; statusText = 'Nearly There'; }
                     else { statusColor = 'bg-emerald-500'; textColor = 'text-emerald-700'; bgColor = 'bg-emerald-50'; statusText = 'Great'; }
@@ -1486,10 +2088,10 @@ export default function AnalyticsPage() {
                           </div>
                           <div>
                             <div className="font-semibold text-gray-800 text-sm">{n.name}</div>
-                            <div className="text-[10px] text-gray-500">{n.group}</div>
+                            <div className="text-xs text-gray-500">{n.group}</div>
                           </div>
                         </div>
-                        <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider", bgColor, textColor)}>
+                        <span className={cn("px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider", bgColor, textColor)}>
                           {statusText}
                         </span>
                       </div>
@@ -1540,7 +2142,7 @@ export default function AnalyticsPage() {
               <div className="flex gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2 bg-white hover:bg-gray-50 text-gray-700 border-dashed">
+                    <Button variant="outline" size="sm" className="gap-1 bg-white hover:bg-gray-50 text-gray-700 border-dashed">
                       <Download className="w-4 h-4" />
                       <span className="hidden sm:inline">Export</span>
                     </Button>
@@ -1568,7 +2170,7 @@ export default function AnalyticsPage() {
             {/* Date Range Picker (Simplified) */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("gap-2", (dateRange.from || dateRange.to) && "border-blue-500 bg-blue-50")}>
+                <Button variant="outline" size="sm" className={cn("gap-1", (dateRange.from || dateRange.to) && "border-blue-500 bg-blue-50")}>
                   <CalendarIcon className="w-4 h-4" />
                   {dateRange.from ? (
                     dateRange.to ? (
@@ -1639,7 +2241,7 @@ export default function AnalyticsPage() {
             {/* Weekday Filter */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("gap-2", selectedWeekdays.length > 0 && "border-violet-500 bg-violet-50")}>
+                <Button variant="outline" size="sm" className={cn("gap-1", selectedWeekdays.length > 0 && "border-violet-500 bg-violet-50")}>
                   <Clock className="w-4 h-4" />
                   {selectedWeekdays.length > 0 ? `${selectedWeekdays.length} Days` : "Weekdays"}
                 </Button>
@@ -1666,7 +2268,7 @@ export default function AnalyticsPage() {
             {/* Meal Count Filter */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("gap-2", mealCountFilter.operator && "border-amber-500 bg-amber-50")}>
+                <Button variant="outline" size="sm" className={cn("gap-1", mealCountFilter.operator && "border-amber-500 bg-amber-50")}>
                   <Utensils className="w-4 h-4" />
                   {mealCountFilter.operator ? `${mealCountFilter.operator} ${mealCountFilter.value} Meals` : "Meal Count"}
                 </Button>
@@ -1702,7 +2304,7 @@ export default function AnalyticsPage() {
             {/* Nutrient Filter */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("gap-2", nutrientFilters.length > 0 && "border-emerald-500 bg-emerald-50")}>
+                <Button variant="outline" size="sm" className={cn("gap-1", nutrientFilters.length > 0 && "border-emerald-500 bg-emerald-50")}>
                   <Plus className="w-4 h-4" />
                   {nutrientFilters.length > 0 ? `${nutrientFilters.length} Nutrient Filters` : "Add Nutrient Filter"}
                 </Button>
@@ -1790,7 +2392,7 @@ export default function AnalyticsPage() {
                           <span className="capitalize font-medium">
                             {f.nutrient.replace('_', ' ')} {f.operator} {f.value}{f.operator === 'between' && f.value2 ? ` - ${f.value2}` : ''}
                           </span>
-                          <button onClick={() => removeNutrientFilter(i)} className="text-red-500 hover:text-red-700">
+                          <button type="button" onClick={() => removeNutrientFilter(i)} className="text-red-500 hover:text-red-700" aria-label="Remove nutrient filter">
                             <X className="w-4 h-4" />
                           </button>
                         </div>
@@ -1839,25 +2441,29 @@ export default function AnalyticsPage() {
                 <table className="w-full text-sm min-w-[1200px]">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="text-left py-4 px-4 font-semibold text-gray-600 sticky left-0 bg-gray-50 z-10 w-[140px]">Date</th>
-                      <th className="text-left py-4 px-4 font-semibold text-gray-600 min-w-[200px]">Meals</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Calories</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Protein</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Carbo-<br />hydrates</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Fat</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Fiber</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Sugar</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Sodium</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Choles-<br />terol</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Saturated<br />Fat</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Unsaturated<br />Fat</th>
-                      <th className="text-right py-4 px-3 font-semibold text-gray-600">Trans<br />Fat</th>
+                      <th className="text-center py-4 px-4 text-xs font-semibold text-gray-600 sticky left-0 bg-gray-50 z-10 w-[140px]">Date</th>
+                      <th className="text-center py-4 px-4 text-xs font-semibold text-gray-600">Meals</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Calories</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Protein<br />(g)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Carbo-<br />hydrates (g)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Fat<br />(g)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Fiber<br />(g)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Sugar<br />(g)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Sodium<br />(mg)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Choles-<br />terol (mg)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Saturated<br />Fat (g)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Unsaturated<br />Fat (g)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Trans<br />Fat (g)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Iron<br />(mg)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Calcium<br />(mg)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Vitamin-D <br /> (IU)</th>
+                      <th className="text-center py-4 px-3 text-xs font-semibold text-gray-600">Potassium<br />(mg)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {paginatedHistory.length === 0 ? (
                       <tr>
-                        <td colSpan={13} className="text-center py-12 text-muted-foreground">
+                        <td colSpan={18} className="text-center py-12 text-muted-foreground">
                           {searchTerm ? 'No results found for your search.' : 'No meal logs available.'}
                         </td>
                       </tr>
@@ -1869,30 +2475,38 @@ export default function AnalyticsPage() {
                             <div className="text-xs text-muted-foreground">{day.date}</div>
                           </td>
                           <td className="py-3 px-4">
-                            <div className="flex flex-wrap gap-1">
-                              {day.meals.slice(0, 3).map((meal, i) => (
-                                <span key={i} className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 border border-slate-200">
-                                  {meal.name}
-                                </span>
+                            <div className="flex flex-col gap-1">
+                              {day.meals.map((meal, i) => (
+                                <TooltipProvider key={i}>
+                                  <ShadTooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-block max-w-[150px] w-fit truncate align-middle rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 border border-slate-200 cursor-help">
+                                        {meal.name}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>{meal.name}</p>
+                                    </TooltipContent>
+                                  </ShadTooltip>
+                                </TooltipProvider>
                               ))}
-                              {day.meals.length > 3 && (
-                                <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">
-                                  +{day.meals.length - 3} more
-                                </span>
-                              )}
                             </div>
                           </td>
-                          <td className="text-right py-3 px-3 font-bold text-gray-800">{day.total_calories}</td>
-                          <td className="text-right py-3 px-3 text-emerald-600 font-medium">{day.total_protein}g</td>
-                          <td className="text-right py-3 px-3 text-amber-600 font-medium">{day.total_carbohydrates}g</td>
-                          <td className="text-right py-3 px-3 text-rose-500 font-medium">{day.total_fat}g</td>
-                          <td className="text-right py-3 px-3 text-violet-600">{day.total_fiber}g</td>
-                          <td className="text-right py-3 px-3 text-pink-500">{day.total_sugar}g</td>
-                          <td className="text-right py-3 px-3 text-blue-500">{day.total_sodium}mg</td>
-                          <td className="text-right py-3 px-3 text-orange-500">{day.total_cholesterol}mg</td>
-                          <td className="text-right py-3 px-3 text-red-400">{day.total_saturated_fat}g</td>
-                          <td className="text-right py-3 px-3 text-green-500">{day.total_unsaturated_fat}g</td>
-                          <td className="text-right py-3 px-3 text-gray-500">{day.total_trans_fat}g</td>
+                          <td className="text-left text-xs py-3 px-3 font-bold text-gray-800">{day.total_calories}</td>
+                          <td className="text-left text-xs py-3 px-3 text-emerald-600 font-medium">{day.total_protein}g</td>
+                          <td className="text-left text-xs py-3 px-3 text-amber-600 font-medium">{day.total_carbohydrates}g</td>
+                          <td className="text-left text-xs py-3 px-3 text-rose-500 font-medium">{day.total_fat}g</td>
+                          <td className="text-left text-xs py-3 px-3 text-violet-600">{day.total_fiber}g</td>
+                          <td className="text-left text-xs py-3 px-3 text-pink-500">{day.total_sugar}g</td>
+                          <td className="text-left text-xs py-3 px-3 text-blue-500">{day.total_sodium}mg</td>
+                          <td className="text-left text-xs py-3 px-3 text-orange-500">{day.total_cholesterol}mg</td>
+                          <td className="text-left text-xs py-3 px-3 text-red-400">{day.total_saturated_fat}g</td>
+                          <td className="text-left text-xs py-3 px-3 text-green-500">{day.total_unsaturated_fat}g</td>
+                          <td className="text-left text-xs py-3 px-3 text-gray-500">{day.total_trans_fat}g</td>
+                          <td className="text-left text-xs py-3 px-3 text-gray-600">{day.total_iron ? `${day.total_iron.toFixed(1)} mg` : '-'}</td>
+                          <td className="text-left text-xs py-3 px-3 text-gray-600">{day.total_calcium ? `${day.total_calcium.toFixed(0)} mg` : '-'}</td>
+                          <td className="text-left text-xs py-3 px-3 text-gray-600">{day.total_vitamin_d ? `${day.total_vitamin_d.toFixed(0)} IU` : '-'}</td>
+                          <td className="text-left text-xs py-3 px-3 text-gray-600">{day.total_potassium ? `${day.total_potassium.toFixed(0)} mg` : '-'}</td>
                         </tr>
                       ))
                     )}
@@ -1936,4 +2550,3 @@ export default function AnalyticsPage() {
     </>
   );
 }
-

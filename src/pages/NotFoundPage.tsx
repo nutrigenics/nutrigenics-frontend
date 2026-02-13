@@ -37,7 +37,7 @@ export default function NotFoundPage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/">
-              <Button className="h-14 px-8 rounded-2xl bg-gray-900 text-white font-bold hover:bg-gray-800 shadow-xl shadow-gray-900/10 w-full sm:w-auto">
+              <Button className="h-14 px-8 rounded-2xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 w-full sm:w-auto">
                 <Home className="w-5 h-5 mr-2" /> Back to Home
               </Button>
             </Link>

@@ -10,6 +10,7 @@ import { ModernAuthBackground } from '@/components/auth/ModernAuthBackground';
 import { AuthCard } from '@/components/auth/AuthCard';
 import { AuthHeader } from '@/components/auth/AuthHeader';
 import { AuthFooter } from '@/components/auth/AuthFooter';
+import { toast } from 'sonner';
 
 
 
@@ -44,24 +45,38 @@ export default function LoginPage() {
         }
     };
 
-    const handleGuestLogin = async () => {
+    const handleGuestLogin = async (role: 'patient' | 'dietitian' | 'hospital' = 'patient') => {
         try {
             setIsLoading(true);
             setError(null);
-            const isOnboarded = await guestLogin();
-            if (isOnboarded) {
-                navigate('/');
-            } else {
-                navigate('/onboarding');
-            }
+
+            // Perform the guest login
+            const isOnboarded = await guestLogin(role);
+
+            // Define redirects for each role
+            const roleRedirects: Record<string, string> = {
+                'patient': isOnboarded ? '/dashboard' : '/onboarding',
+                'dietitian': isOnboarded ? '/dietitian/dashboard' : '/onboarding',
+                'hospital': isOnboarded ? '/hospital/dashboard' : '/onboarding'
+            };
+
+            // Get the correct path
+            const redirectPath = roleRedirects[role] || '/dashboard';
+
+            console.log(`Guest login success for role: ${role}. Redirecting to: ${redirectPath}`);
+
+            // Force navigation
+            navigate(redirectPath);
+
         } catch (err: any) {
-            setError(err.response?.data?.detail || err.message || 'Guest login failed.');
+            console.error('Guest login failed:', err);
+            setError(err.response?.data?.detail || 'Guest login failed. Please try again.');
         } finally {
             setIsLoading(false);
         }
     };
 
-    const inputClasses = "h-14 bg-white/50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-logo focus:ring-4 focus:ring-logo/10 transition-all rounded-lg text-lg font-medium shadow-sm";
+    const inputClasses = "h-14 bg-white/50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all rounded-lg text-lg font-medium shadow-sm";
 
     return (
         <div className="relative min-h-screen w-full flex flex-col overflow-hidden">
@@ -93,8 +108,10 @@ export default function LoginPage() {
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
                             <div className="relative group/field">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within/field:text-logo transition-colors" />
+                                <label htmlFor="login-email" className="sr-only">Email Address</label>
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within/field:text-primary transition-colors" />
                                 <Input
+                                    id="login-email"
                                     type="email"
                                     placeholder="Email Address"
                                     value={email}
@@ -107,8 +124,10 @@ export default function LoginPage() {
 
                         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
                             <div className="relative group/field">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within/field:text-logo transition-colors" />
+                                <label htmlFor="login-password" className="sr-only">Password</label>
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within/field:text-primary transition-colors" />
                                 <Input
+                                    id="login-password"
                                     type={showPassword ? 'text' : 'password'}
                                     placeholder="Password"
                                     value={password}
@@ -120,6 +139,7 @@ export default function LoginPage() {
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                                 >
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
@@ -150,15 +170,33 @@ export default function LoginPage() {
                             </Button>
                         </motion.div>
 
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="grid grid-cols-3 gap-2">
                             <Button
                                 variant="outline"
-                                className="w-full h-14 text-base bg-black/[0.03] border-black/5 text-gray-700 font-medium shadow-premium hover:shadow-premium-lg transition-all duration-300 group hover:bg-black/[0.06] rounded-lg cursor-pointer"
+                                className="h-12 text-xs bg-black/[0.03] border-black/5 text-gray-700 font-bold shadow-sm hover:shadow-md transition-all duration-300 hover:bg-black/[0.06] rounded-xl"
                                 type="button"
-                                onClick={handleGuestLogin}
+                                onClick={() => handleGuestLogin('patient')}
                                 disabled={isLoading}
                             >
-                                Continue as Guest
+                                Patient
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="h-12 text-xs bg-black/[0.03] border-black/5 text-gray-700 font-bold shadow-sm hover:shadow-md transition-all duration-300 hover:bg-black/[0.06] rounded-xl"
+                                type="button"
+                                onClick={() => handleGuestLogin('dietitian')}
+                                disabled={isLoading}
+                            >
+                                Dietitian
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="h-12 text-xs bg-black/[0.03] border-black/5 text-gray-700 font-bold shadow-sm hover:shadow-md transition-all duration-300 hover:bg-black/[0.06] rounded-xl"
+                                type="button"
+                                onClick={() => handleGuestLogin('hospital')}
+                                disabled={isLoading}
+                            >
+                                Hospital
                             </Button>
                         </motion.div>
 
@@ -178,9 +216,9 @@ export default function LoginPage() {
                         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="w-full grid grid-cols-1 gap-4">
                             <Button
                                 variant="outline"
-                                className="w-full h-14 text-base bg-black/[0.03] border-black/5 text-gray-700 font-medium shadow-premium hover:shadow-premium-lg transition-all duration-300 group hover:bg-black/[0.06] rounded-lg cursor-pointer"
+                                className="w-full h-14 text-base bg-slate-50 border-slate-100 text-gray-700 font-medium hover:bg-slate-100 transition-all duration-300 group rounded-lg cursor-pointer"
                                 type="button"
-                                onClick={() => alert('Coming soon')}
+                                onClick={() => toast.info('Google Sign-In will be available soon.')}
                             >
                                 <svg width="22px" height="22px" viewBox="-3 0 262 262" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid" fill="#000000"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"><path d="M255.878 133.451c0-10.734-.871-18.567-2.756-26.69H130.55v48.448h71.947c-1.45 12.04-9.283 30.172-26.69 42.356l-.244 1.622 38.755 30.023 2.685.268c24.659-22.774 38.875-56.282 38.875-96.027" fill="#4285F4"></path><path d="M130.55 261.1c35.248 0 64.839-11.605 86.453-31.622l-41.196-31.913c-11.024 7.688-25.82 13.055-45.257 13.055-34.523 0-63.824-22.773-74.269-54.25l-1.531.13-40.298 31.187-.527 1.465C35.393 231.798 79.49 261.1 130.55 261.1" fill="#34A853"></path><path d="M56.281 156.37c-2.756-8.123-4.351-16.827-4.351-25.82 0-8.994 1.595-17.697 4.206-25.82l-.073-1.73L15.26 71.312l-1.335.635C5.077 89.644 0 109.517 0 130.55s5.077 40.905 13.925 58.602l42.356-32.782" fill="#FBBC05"></path><path d="M130.55 50.479c24.514 0 41.05 10.589 50.479 19.438l36.844-35.974C195.245 12.91 165.798 0 130.55 0 79.49 0 35.393 29.301 13.925 71.947l42.211 32.783c10.59-31.477 39.891-54.251 74.414-54.251" fill="#EB4335"></path></g></svg>
                                 Continue with Google
@@ -197,7 +235,7 @@ export default function LoginPage() {
                             className="text-center text-gray-500 mt-8"
                         >
                             Don't have an account?{' '}
-                            <Link to="/signup" className="font-bold text-gray-900 hover:text-logo transition-colors link-underline">
+                            <Link to="/signup" className="font-bold text-gray-900 hover:text-primary transition-colors link-underline">
                                 Sign Up
                             </Link>
                         </motion.p>

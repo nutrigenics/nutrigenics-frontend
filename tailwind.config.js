@@ -93,11 +93,12 @@ export default {
         },
       },
       boxShadow: {
-        'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-        'medium': '0 4px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-        'large': '0 10px 40px -10px rgba(0, 0, 0, 0.2)',
-        'glow-logo': '0 0 20px rgba(100, 245, 10, 0.3)',
-        'glow-purple': '0 0 20px rgba(108, 99, 255, 0.3)',
+        'soft-sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        'soft': '0 2px 8px -2px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.01)',
+        'medium': '0 4px 12px -3px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.02)',
+        'large': '0 10px 25px -6px rgba(0, 0, 0, 0.08), 0 4px 10px -4px rgba(0, 0, 0, 0.02)',
+        'glow-logo': '0 0 15px rgba(100, 245, 10, 0.15)',
+        'glow-purple': '0 0 15px rgba(108, 99, 255, 0.15)',
       },
       backdropBlur: {
         xs: '2px',

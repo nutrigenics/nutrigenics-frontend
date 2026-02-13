@@ -16,7 +16,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface HeaderProps {
     onMobileMenuToggle?: () => void;
@@ -27,6 +27,12 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
     const location = useLocation();
     const [notifOpen, setNotifOpen] = useState(false);
+    const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+    useEffect(() => {
+        const intervalId = window.setInterval(() => setCurrentTime(Date.now()), 60_000);
+        return () => window.clearInterval(intervalId);
+    }, []);
 
     // Get profile URL based on role
     const getProfileUrl = () => {
@@ -43,7 +49,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     // Get first letter of first name for avatar
     const getAvatarLetter = () => {
         if (profile) {
-            const name = (profile as any).fname || (profile as any).name || '';
+            const name = ('fname' in profile ? profile.fname : profile.name) || '';
             return name.charAt(0)?.toUpperCase() || 'U';
         }
         return 'U';
@@ -78,7 +84,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
     // Format notification time
     const formatTime = (timestamp: number) => {
-        const diff = Date.now() - timestamp;
+        const diff = currentTime - timestamp;
         const minutes = Math.floor(diff / 60000);
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
@@ -168,91 +174,118 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                             >
                                 <Bell className="w-5 h-5" />
                                 {unreadCount > 0 && (
-                                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold border-2 border-white z-10 animate-in zoom-in duration-200">
+                                    <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold border-2 border-background z-10 animate-in zoom-in duration-200 shadow-sm">
                                         {unreadCount > 9 ? '9+' : unreadCount}
                                     </span>
                                 )}
                             </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-96 p-0" align="end">
+                        <PopoverContent className="w-[min(380px,calc(100vw-2rem))] p-0 shadow-xl border-border/50 rounded-2xl overflow-hidden" align="end" sideOffset={8}>
                             {/* Header */}
-                            <div className="flex items-center justify-between p-4 border-b">
-                                <h3 className="font-bold text-lg">Notifications</h3>
+                            <div className="flex items-center justify-between p-5 border-b bg-card/50 backdrop-blur-sm">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="font-bold text-lg tracking-tight">Notifications</h3>
+                                    {unreadCount > 0 && (
+                                        <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full">
+                                            {unreadCount} New
+                                        </span>
+                                    )}
+                                </div>
                                 {notifications.length > 0 && (
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-1">
                                         <Button
                                             variant="ghost"
-                                            size="sm"
-                                            className="h-8 text-xs"
+                                            size="icon"
+                                            className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
                                             onClick={() => markAllAsRead()}
+                                            title="Mark all as read"
+                                            aria-label="Mark all notifications as read"
                                         >
-                                            <Check className="w-3 h-3 mr-1" /> Mark all read
+                                            <Check className="w-4 h-4" />
                                         </Button>
                                         <Button
                                             variant="ghost"
-                                            size="sm"
-                                            className="h-8 text-xs text-destructive hover:text-destructive"
+                                            size="icon"
+                                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full"
                                             onClick={() => clearAll()}
+                                            title="Clear all notifications"
+                                            aria-label="Clear all notifications"
                                         >
-                                            <Trash2 className="w-3 h-3 mr-1" /> Clear all
+                                            <Trash2 className="w-4 h-4" />
                                         </Button>
                                     </div>
                                 )}
                             </div>
 
                             {/* Notification List */}
-                            <div className="max-h-96 overflow-y-auto">
+                            <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
                                 {notifications.length === 0 ? (
-                                    <div className="p-8 text-center text-muted-foreground">
-                                        <Bell className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                                        <p className="font-medium">No notifications</p>
-                                        <p className="text-sm">You're all caught up!</p>
+                                    <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+                                        <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mb-4">
+                                            <Bell className="w-8 h-8 text-muted-foreground/40" />
+                                        </div>
+                                        <h4 className="font-semibold text-foreground mb-1">No notifications</h4>
+                                        <p className="text-sm text-muted-foreground max-w-[200px]">
+                                            You're all caught up! Check back later for updates.
+                                        </p>
                                     </div>
                                 ) : (
-                                    notifications.slice(0, 10).map(notif => (
-                                        <div
-                                            key={notif.id}
-                                            className={`p-4 border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer ${!notif.read ? 'bg-primary/5' : ''}`}
-                                            onClick={() => markAsRead(notif.id)}
-                                        >
-                                            <div className="flex gap-3">
-                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${getNotifColor(notif.type)}`}>
-                                                    <Bell className="w-4 h-4" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <p className="font-medium text-sm truncate">{notif.title}</p>
-                                                        {!notif.read && (
-                                                            <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />
-                                                        )}
+                                    <div className="divide-y divide-border/50">
+                                        {notifications.map(notif => (
+                                            <button
+                                                type="button"
+                                                key={notif.id}
+                                                className={`group w-full text-left p-4 hover:bg-muted/40 transition-all cursor-pointer relative ${!notif.read ? 'bg-primary/[0.03]' : ''}`}
+                                                onClick={() => markAsRead(notif.id)}
+                                                aria-label={`Open notification: ${notif.title}`}
+                                            >
+                                                <div className="flex gap-4">
+                                                    <div className={`mt-0.5 w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-105 ${getNotifColor(notif.type)}`}>
+                                                        <Bell className="w-4 h-4" />
                                                     </div>
-                                                    <p className="text-sm text-muted-foreground line-clamp-2">{notif.description}</p>
-                                                    <p className="text-xs text-muted-foreground mt-1">{formatTime(notif.timestamp)}</p>
+                                                    <div className="flex-1 min-w-0 space-y-1">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <p className={`text-sm leading-none ${!notif.read ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'}`}>
+                                                                {notif.title}
+                                                            </p>
+                                                            {!notif.read && (
+                                                                <span className="w-2 h-2 rounded-full bg-primary shrink-0 shadow-sm shadow-primary/20" />
+                                                            )}
+                                                        </div>
+                                                        <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                                                            {notif.description}
+                                                        </p>
+                                                        <p className="text-xs font-medium text-muted-foreground/70 pt-1">
+                                                            {formatTime(notif.timestamp)}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </div>
-                                    ))
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
                         </PopoverContent>
                     </Popover>
 
-                    {/* Search Button */}
-                    <div className="relative group">
-                        <Link
-                            to="/search"
-                            className="flex items-center justify-center w-10 h-10 rounded-full text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200"
-                            aria-label="Search recipes"
-                        >
-                            <Search className="w-5 h-5" />
-                        </Link>
-                        <div className="absolute top-12 right-0 hidden group-hover:flex items-center gap-1 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md shadow-md border animate-in fade-in slide-in-from-top-1 whitespace-nowrap">
-                            <span>Search</span>
-                            <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
-                                <span className="text-xs">⌘</span>K
-                            </kbd>
+                    {/* Search Button - Only for patients */}
+                    {user?.role === 'patient' && (
+                        <div className="relative group">
+                            <Link
+                                to="/search"
+                                className="flex items-center justify-center w-10 h-10 rounded-full text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200"
+                                aria-label="Search recipes"
+                            >
+                                <Search className="w-5 h-5" />
+                            </Link>
+                            <div className="absolute top-12 right-0 hidden group-hover:flex items-center gap-1 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md shadow-md border animate-in fade-in slide-in-from-top-1 whitespace-nowrap">
+                                <span>Search</span>
+                                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xs font-medium text-muted-foreground opacity-100">
+                                    <span className="text-xs">⌘</span>K
+                                </kbd>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Profile Avatar - Role-based link */}
                     <Link
@@ -266,6 +299,6 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                     </Link>
                 </div>
             </div>
-        </header>
+        </header >
     );
 }

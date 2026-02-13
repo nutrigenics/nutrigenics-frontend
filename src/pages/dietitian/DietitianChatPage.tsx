@@ -8,6 +8,7 @@ import type { Message } from '@/services/chat.service';
 import { dietitianDashboardService } from '@/services/dietitian-dashboard.service';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
 
 export default function DietitianChatPage() {
   const { patientId } = useParams<{ patientId: string }>();
@@ -107,7 +108,7 @@ export default function DietitianChatPage() {
     } catch (error) {
       console.error('Failed to send message:', error);
       // Rollback on error (optional, or show alert)
-      alert("Failed to send message. Please retry.");
+      toast.error('Failed to send message. Please retry.');
       fetchMessages(); // Re-sync state
     }
   };
@@ -122,7 +123,7 @@ export default function DietitianChatPage() {
       <div className="bg-white p-4 items-center flex justify-between border-b border-gray-100 z-10 sticky top-0">
         <div className="flex items-center gap-3">
           <Link to="/dietitian/chats">
-            <Button variant="ghost" size="icon" className="h-10 w-10 text-gray-500 hover:bg-gray-50 rounded-full">
+            <Button variant="ghost" size="icon" className="h-10 w-10 text-gray-500 hover:bg-gray-50 rounded-full" aria-label="Back to chats">
               <ArrowLeft className="w-5 h-5" />
             </Button>
           </Link>
@@ -141,7 +142,7 @@ export default function DietitianChatPage() {
           )}
         </div>
 
-        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-900 rounded-full">
+        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-900 rounded-full" aria-label="Chat options">
           <MoreVertical className="w-5 h-5" />
         </Button>
       </div>
@@ -179,13 +180,14 @@ export default function DietitianChatPage() {
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type your message..."
-              className="flex-1 rounded-full pl-6 pr-12 py-6 bg-gray-50 border-gray-200 focus:ring-2 focus:ring-logo/20 focus:border-logo/50"
+              className="flex-1 rounded-full pl-6 pr-12 py-6 bg-gray-50 border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary/50"
             />
           </div>
           <Button
             type="submit"
             disabled={!newMessage.trim()}
             className="w-12 h-12 rounded-full bg-gray-900 hover:bg-gray-800 text-white shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-transform hover:scale-105 active:scale-95"
+            aria-label="Send message"
           >
             <Send className="w-5 h-5" />
           </Button>

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { RecipeTable } from '@/components/recipe/RecipeTable';
-import { Card } from '@/components/ui/card';
 import { Bookmark, Heart, BookOpen } from 'lucide-react';
 import { recipeService } from '@/services/recipe.service';
 import type { Recipe } from '@/types';
@@ -66,58 +65,52 @@ export default function BookmarksPage() {
 
   return (
     <>
-      <Card className="w-full mb-8 p-8 md:p-10 rounded-[2.5rem] relative overflow-hidden shadow-sm border-border">
-        <div className="relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 mb-4"
-          >
-            <div className="p-1.5 bg-muted rounded-lg">
-              <BookOpen className="w-5 h-5 text-foreground" />
-            </div>
-            <span className="text-muted-foreground text-xs font-bold uppercase tracking-wide">Library</span>
-          </motion.div>
+      <div className="w-full relative overflow-hidden mb-12">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-2 mb-4"
+        >
+          <div className="p-1.5 bg-muted rounded-lg">
+            <BookOpen className="w-5 h-5 text-foreground" />
+          </div>
+          <span className="text-muted-foreground text-xs font-bold uppercase tracking-wide">Library</span>
+        </motion.div>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-4xl md:text-5xl font-bold text-foreground mb-2 tracking-tight"
-          >
-            Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-foreground to-muted-foreground">Collection</span>
-          </motion.h1>
+        <motion.h1
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="text-4xl md:text-5xl font-bold text-foreground mb-2 tracking-tight"
+        >
+          Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-foreground to-muted-foreground">Collection</span>
+        </motion.h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-lg text-muted-foreground max-w-lg"
-          >
-            Access your saved recipes and favorites in one place.
-          </motion.p>
-        </div>
-
-        {/* Decorative Background */}
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-gradient-to-bl from-amber-500/10 to-transparent rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl opacity-60 translate-y-1/2 -translate-x-1/3" />
-      </Card>
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-lg text-muted-foreground max-w-lg"
+        >
+          Access your saved recipes and favorites in one place.
+        </motion.p>
+      </div>
 
       <div className="w-full">
-        <Tabs defaultValue="bookmarks" className="w-full">
+        <Tabs defaultValue="bookmarks" className="w-full ">
           <div className="flex items-center justify-between mb-6">
-            <TabsList className="h-12 p-1 bg-muted/50 rounded-xl">
-              <TabsTrigger value="bookmarks" className="rounded-lg px-6 h-10 font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsList className="h-16 bg-white rounded-full border px-3">
+              <TabsTrigger value="bookmarks" className="w-full rounded-full px-6 h-10 font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <Bookmark className="w-4 h-4 mr-2" />
                 Saved
-                <span className="ml-2 bg-muted-foreground/10 px-2 py-0.5 rounded-full text-xs">
+                <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
                   {bookmarkedRecipes.length}
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="likes" className="rounded-lg px-6 h-10 font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="likes" className="w-full rounded-full px-6 h-10 font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <Heart className="w-4 h-4 mr-2" />
                 Liked
-                <span className="ml-2 bg-muted-foreground/10 px-2 py-0.5 rounded-full text-xs">
+                <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
                   {likedRecipes.length}
                 </span>
               </TabsTrigger>
@@ -137,7 +130,7 @@ export default function BookmarksPage() {
                 />
               </motion.div>
             ) : (
-              <div className="text-center py-20 bg-muted/30 rounded-[2rem] border-2 border-dashed border-border">
+              <div className="text-center py-20 bg-white rounded-[2rem] border-2 border-dashed border-border">
                 <div className="w-16 h-16 bg-card rounded-full shadow-sm flex items-center justify-center mx-auto mb-4">
                   <Bookmark className="w-6 h-6 text-muted-foreground" />
                 </div>
@@ -163,7 +156,7 @@ export default function BookmarksPage() {
                 />
               </motion.div>
             ) : (
-              <div className="text-center py-20 bg-muted/30 rounded-[2rem] border-2 border-dashed border-border">
+              <div className="text-center py-20 bg-white rounded-[2rem] border-2 border-dashed border-border">
                 <div className="w-16 h-16 bg-card rounded-full shadow-sm flex items-center justify-center mx-auto mb-4">
                   <Heart className="w-6 h-6 text-muted-foreground" />
                 </div>

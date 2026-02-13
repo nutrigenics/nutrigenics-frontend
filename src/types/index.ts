@@ -5,9 +5,10 @@ export interface BaseUser {
     first_name?: string;
     last_name?: string;
     role: 'patient' | 'dietitian' | 'hospital';
-    patient?: {
-        patient_id?: string;
-    };
+    patient?: Patient;
+    dietitian?: Dietitian;
+    hospital?: Hospital;
+    is_onboarded?: boolean;
 }
 
 export interface Patient {
@@ -77,6 +78,7 @@ export interface Hospital {
 
 // Recipe types
 export interface Nutrient {
+    id?: number;
     name: string;
     unit: string;
 }
@@ -114,6 +116,7 @@ export interface Recipe {
     recipe_instructions?: string;
     recipe_time_minutes?: number;
     recipe_steps?: number;
+    recipe_yields?: number;
 
     // Arrays
     tags?: (string | { id: number; name: string })[];
@@ -161,6 +164,7 @@ export interface MealPlan {
     protein?: number;
     carbs?: number;
     fat?: number;
+    micros?: { [key: string]: number };
     portion?: number;
 }
 
@@ -310,7 +314,15 @@ export interface DietitianHospitalRequest {
 export interface HospitalDashboardStats {
     hospital: Hospital;
     total_dietitians: number;
+    total_patients: number;
     dietitians: Dietitian[];
+    patients: {
+        id: number;
+        patient_id: string;
+        name: string;
+        gender: string;
+        dietitian_id: number;
+    }[];
     pending_requests_count: number;
     pending_requests: {
         id: number;

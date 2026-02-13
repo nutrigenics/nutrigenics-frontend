@@ -5,14 +5,14 @@ import { Button } from '@/components/ui/button';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { SkeletonStatCard, SkeletonRecipeCard } from '@/components/ui/skeleton';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
-import { Zap, ArrowRight, Flame, ChevronRight } from 'lucide-react';
+import { Zap, ArrowRight, Flame, ChevronRight, Sparkles } from 'lucide-react';
 import { planService } from '@/services/plan.service';
 import { recipeService } from '@/services/recipe.service';
 import { TodaysPlanStatus } from '@/components/dashboard/TodaysPlanStatus';
 import { PopularCuisines } from '@/components/dashboard/PopularCuisines';
 import { HighNutrientRecipes } from '@/components/dashboard/HighNutrientRecipes';
 import { TimeBasedRecipes } from '@/components/dashboard/TimeBasedRecipes';
-import { QuickActions } from '@/components/dashboard/QuickActions';
+
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
 import type { NutrientSummary, Patient, Recipe } from '@/types';
@@ -137,43 +137,44 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* Hero Header */}
-      <div className="w-full mb-8 px-2 relative overflow-hidden">
-        <div className="relative flex flex-col md:flex-row-reverse items-start gap-2 z-10">
+      {/* Hero Header - Soft Clean Style */}
+      <div className="w-full mb-8 relative">
+        <div className="relative flex flex-col md:flex-row-reverse items-center justify-between gap-4 z-10 p-2">
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-fit flex items-center gap-2 mb-2"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-full shadow-soft-sm border border-slate-100"
           >
-            <span className="text-muted-foreground text-sm font-medium flex items-center whitespace-nowrap gap-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-slate-600 text-sm font-semibold tracking-tight">
               {currentDate}
             </span>
           </motion.div>
 
           <div className="w-full">
             <motion.h1
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="text-4xl md:text-5xl font-bold text-foreground mb-2 tracking-tight"
+              className="text-3xl md:text-4xl font-bold text-slate-900 mb-2 tracking-tight"
             >
-              {greeting}, <span className="text-foreground">{userName}</span>
+              {greeting}, <span className="text-emerald-700">{userName}</span>
             </motion.h1>
 
             <motion.p
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="text-lg text-muted-foreground px-1"
+              className="text-slate-500 font-medium text-lg"
             >
-              Track your meals and stay on target with your personalized plan.
+              Your daily wellness overview is ready.
             </motion.p>
           </div>
         </div>
       </div>
 
       {/* Quick Actions - Primary CTAs */}
-      <QuickActions />
+      {/* <QuickActions /> */}
 
       {/* Today's Meals Section */}
       <div className="mb-12">
@@ -181,14 +182,14 @@ export default function DashboardPage() {
       </div>
 
       {nutrientIntake ? (
-        <Card className="p-10 border-border shadow-premium hover:shadow-premium-lg transition-all duration-300 bg-card rounded-2xl mb-12">
-          <div className="flex items-center justify-between mb-8">
+        <Card className="p-8 border-slate-100 shadow-soft hover:shadow-soft-lg transition-all duration-300 bg-white rounded-xl mb-12">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Today's Nutrition</h2>
-              <p className="text-muted-foreground">Based on your tracked meals</p>
+              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Today's Nutrition</h2>
+              <p className="text-slate-500 font-medium">Daily intake summary</p>
             </div>
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground bg-muted px-3 py-1 rounded-full">
-              <Flame className="w-4 h-4 text-orange-500" />
+            <div className="flex items-center gap-2 text-sm font-bold text-emerald-700 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100 shadow-sm">
+              <Flame className="w-4 h-4 text-emerald-500 fill-emerald-500" />
               <span>{nutrientIntake.Calories?.toFixed(0) || 0} kcal consumed</span>
             </div>
           </div>
@@ -218,8 +219,8 @@ export default function DashboardPage() {
                       </CircularProgress>
                     </div>
                     <div className="text-center">
-                      <p className="font-bold text-foreground">Calories</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="font-bold text-slate-900">Calories</p>
+                      <p className="text-sm text-slate-500 font-medium">
                         {nutrientIntake.Calories?.toFixed(0)} / {t.calories}
                       </p>
                     </div>
@@ -234,8 +235,8 @@ export default function DashboardPage() {
                       size="lg"
                     />
                     <div className="text-center">
-                      <p className="font-bold text-foreground">Protein</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="font-bold text-slate-900">Protein</p>
+                      <p className="text-sm text-slate-500 font-medium">
                         {nutrientIntake.Protein?.toFixed(0)} / {t.protein}g
                       </p>
                     </div>
@@ -250,8 +251,8 @@ export default function DashboardPage() {
                       size="lg"
                     />
                     <div className="text-center">
-                      <p className="font-bold text-foreground">Carbohydrates</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="font-bold text-slate-900">Carbohydrates</p>
+                      <p className="text-sm text-slate-500 font-medium">
                         {nutrientIntake.Carbohydrates?.toFixed(0)} / {t.carbs}g
                       </p>
                     </div>
@@ -266,8 +267,8 @@ export default function DashboardPage() {
                       size="lg"
                     />
                     <div className="text-center">
-                      <p className="font-bold text-foreground">Fat</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="font-bold text-slate-900">Fat</p>
+                      <p className="text-sm text-slate-500 font-medium">
                         {nutrientIntake.Fat?.toFixed(0)} / {t.fat}g
                       </p>
                     </div>
@@ -277,45 +278,46 @@ export default function DashboardPage() {
             })()}
           </div>
 
-          <div className="mt-8 flex justify-center">
+          <div className="mt-10 flex justify-center">
             <Link to="/analytics">
-              <Button variant="ghost" className="p-6 text-muted-foreground hover:text-foreground cursor-pointer">
-                View Detailed Analytics <ArrowRight className="w-4 h-4" />
+              <Button variant="ghost" className="rounded-full px-8 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50">
+                View Detailed Analytics <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
           </div>
         </Card>
       ) : (
-        <Card className="w-full rounded-3xl overflow-hidden border-border shadow-premium-lg mb-12 relative min-h-[400px] flex items-center">
+        <Card className="w-full rounded-xl overflow-hidden border-slate-100 shadow-soft-lg mb-12 relative min-h-[400px] flex items-center bg-white">
           {/* Background Image / Cover */}
           <div className="absolute top-0 right-0 w-full lg:w-1/2 h-full z-0 overflow-hidden">
             <img
               src="/illustrations/premium-daily-plan.png"
               alt="Premium Daily Plan"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover opacity-90"
             />
             {/* Smooth Fade / Blur Mask */}
-            <div className="absolute inset-0 bg-gradient-to-l from-transparent via-background/40 to-background lg:via-white/30 lg:to-white" />
+            <div className="absolute inset-0 bg-gradient-to-l from-white via-white/40 to-white/10 lg:via-white/30 lg:to-transparent" />
           </div>
 
-          <div className="relative z-10 p-8 md:p-12 lg:p-16 flex flex-col items-center lg:items-start text-center lg:text-left max-w-2xl">
-            <span className="px-4 py-2 bg-primary/10 rounded-full text-xs font-bold text-primary uppercase tracking-wider mb-6 inline-block">
-              ✨ Let's Get Started
+          <div className="relative z-10 p-10 md:p-14 lg:p-16 flex flex-col items-center lg:items-start text-center lg:text-left max-w-2xl">
+            <span className="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-full text-xs font-bold text-emerald-700 uppercase tracking-widest mb-6 border border-emerald-100 w-fit">
+              <Sparkles className="w-3 h-3 fill-emerald-700" />
+              Let's Get Started
             </span>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4 tracking-tight leading-tight">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 mb-4 tracking-tight leading-tight">
               Craft Your Perfect <br className="hidden md:block" />Daily Plan
             </h2>
-            <p className="text-muted-foreground text-base md:text-lg mb-8 leading-relaxed max-w-lg">
+            <p className="text-slate-500 text-base md:text-lg mb-8 leading-relaxed max-w-lg font-medium">
               Kickstart your wellness journey with nutritious meals. Select from our curated options to build your perfect day.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start w-full sm:w-auto">
               <Link to="/plan" className="w-full sm:w-auto">
-                <Button size="lg" className="w-full h-14 px-8 rounded-full font-bold text-base shadow-lg shadow-primary/25 hover:shadow-primary/30 transition-all">
+                <Button size="lg" className="w-full h-14 px-8 rounded-full font-bold text-base shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all">
                   Start Planning <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
               <Link to="/recipes" className="w-full sm:w-auto">
-                <Button variant="outline" size="lg" className="w-full h-14 px-8 rounded-full font-medium text-base bg-white/50 backdrop-blur-sm hover:bg-white/80 transition-all border-white/40">
+                <Button variant="outline" size="lg" className="w-full h-14 px-8 rounded-full font-medium text-base bg-white/50 backdrop-blur-md hover:bg-white border-slate-200 text-slate-700">
                   Browse Recipes
                 </Button>
               </Link>

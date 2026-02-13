@@ -106,6 +106,7 @@ export const recipeService = {
     async filterRecipes(filters: {
         cuisine?: string[];
         diet?: string[];
+        meal_types?: string[];
         max_time?: number;
         min_time?: number;
     }) {
@@ -121,8 +122,18 @@ export const recipeService = {
         if (filters.diet && filters.diet.length > 0) {
             params.diet = filters.diet.join(',');
         }
+        if (filters.meal_types && filters.meal_types.length > 0) {
+            // Backend expects 'tags' for meal types (and other tags)
+            // Using getlist in backend implies tags=A&tags=B format, 
+            // but many standard serializers use standard array handling.
+            // Let's pass array directly, axios/client usually handles it.
+            params.tags = filters.meal_types;
+        }
         if (filters.max_time) {
             params.max_time = filters.max_time;
+        }
+        if (filters.min_time !== undefined) {
+            params.min_time = filters.min_time;
         }
 
         const response = await apiClient.get('/api/v1/recipes/', { params });
@@ -342,4 +353,3 @@ export const recipeService = {
         }
     },
 };
-

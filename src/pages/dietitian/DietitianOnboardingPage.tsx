@@ -25,7 +25,7 @@ export default function DietitianOnboardingPage() {
             transition={{ delay: 0.1 }}
             className="text-4xl md:text-5xl font-black text-gray-900 mb-4"
           >
-            Join our <span className="text-transparent bg-clip-text bg-gradient-to-r from-logo to-emerald-600">Expert Network</span>
+            Join our <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-emerald-600">Expert Network</span>
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 10 }}

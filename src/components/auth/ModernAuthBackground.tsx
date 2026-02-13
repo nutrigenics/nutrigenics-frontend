@@ -1,5 +1,29 @@
 import { motion } from 'framer-motion';
 
+interface ParticleConfig {
+    x: string;
+    y: string;
+    opacity: number;
+    duration: number;
+    delay: number;
+}
+
+const pseudoRandom = (seed: number): number => {
+    const value = Math.sin(seed * 12.9898) * 43758.5453;
+    return value - Math.floor(value);
+};
+
+const PARTICLES: ParticleConfig[] = Array.from({ length: 20 }, (_, index) => {
+    const seed = index + 1;
+    return {
+        x: `${Math.round(pseudoRandom(seed) * 100)}%`,
+        y: `${Math.round(pseudoRandom(seed * 2) * 100)}%`,
+        opacity: Number((pseudoRandom(seed * 3) * 0.5).toFixed(2)),
+        duration: Number((pseudoRandom(seed * 4) * 10 + 10).toFixed(2)),
+        delay: Number((pseudoRandom(seed * 5) * 10).toFixed(2)),
+    };
+});
+
 export const ModernAuthBackground = () => {
     return (
         <div className="fixed inset-0 w-full h-full overflow-hidden bg-[#f8faf8] -z-10">
@@ -22,7 +46,7 @@ export const ModernAuthBackground = () => {
 
             {/* Floating Glow Orbs */}
             {[
-                { color: 'bg-logo/10', size: 'w-[500px] h-[500px]', pos: 'top-[-10%] left-[-10%]', duration: 15 },
+                { color: 'bg-primary/10', size: 'w-[500px] h-[500px]', pos: 'top-[-10%] left-[-10%]', duration: 15 },
                 { color: 'bg-emerald-200/20', size: 'w-[400px] h-[400px]', pos: 'bottom-[-5%] right-[0%]', duration: 20 },
                 { color: 'bg-blue-100/20', size: 'w-[300px] h-[300px]', pos: 'top-[20%] right-[-5%]', duration: 18 },
             ].map((orb, i) => (
@@ -43,24 +67,24 @@ export const ModernAuthBackground = () => {
 
             {/* Particle Effects (Simplified) */}
             <div className="absolute inset-0 pointer-events-none">
-                {[...Array(20)].map((_, i) => (
+                {PARTICLES.map((particle, i) => (
                     <motion.div
                         key={i}
                         className="absolute w-1 h-1 bg-gray-300/30 rounded-full"
                         initial={{
-                            x: Math.random() * 100 + "%",
-                            y: Math.random() * 100 + "%",
-                            opacity: Math.random() * 0.5,
+                            x: particle.x,
+                            y: particle.y,
+                            opacity: particle.opacity,
                         }}
                         animate={{
                             y: [null, "-20%"],
                             opacity: [0, 0.5, 0],
                         }}
                         transition={{
-                            duration: Math.random() * 10 + 10,
+                            duration: particle.duration,
                             repeat: Infinity,
                             ease: "linear",
-                            delay: Math.random() * 10
+                            delay: particle.delay
                         }}
                     />
                 ))}
