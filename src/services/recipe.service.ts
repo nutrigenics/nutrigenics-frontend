@@ -1,5 +1,6 @@
 import apiClient from './api.client';
 import type { Recipe } from '../types';
+import { normalizeRecipePayload } from '@/utils/recipe';
 
 /**
  * Recipe Service - matches Django backend API v1
@@ -7,14 +8,49 @@ import type { Recipe } from '../types';
  */
 
 export const recipeService = {
+    buildQueryParams(params?: {
+        cuisine?: string | string[];
+        diet?: string | string[];
+        meal_type?: string;
+        tags?: string | string[];
+        max_time?: number;
+        min_time?: number;
+        search?: string;
+        page?: number;
+        limit?: number;
+    }) {
+        if (!params) return undefined;
+
+        const queryParams: Record<string, unknown> = { ...params };
+
+        if (queryParams.meal_type && !queryParams.tags) {
+            queryParams.tags = queryParams.meal_type;
+        }
+
+        if (Array.isArray(queryParams.cuisine)) {
+            queryParams.cuisine = queryParams.cuisine.join(',');
+        }
+        if (Array.isArray(queryParams.diet)) {
+            queryParams.diet = queryParams.diet.join(',');
+        }
+        if (Array.isArray(queryParams.tags)) {
+            queryParams.tags = queryParams.tags.join(',');
+        }
+
+        return queryParams;
+    },
+
     /**
      * Get all recipes with optional filters
      * GET /api/v1/recipes/
      */
     async getAllRecipes(params?: {
-        cuisine?: string;
-        diet?: string;
+        cuisine?: string | string[];
+        diet?: string | string[];
+        meal_type?: string;
+        tags?: string | string[];
         max_time?: number;
+        min_time?: number;
         search?: string;
         page?: number;
     }) {
@@ -27,8 +63,10 @@ export const recipeService = {
                 results: MOCK_RECIPES
             };
         }
-        const response = await apiClient.get('/api/v1/recipes/', { params });
-        return response.data;
+        const response = await apiClient.get('/api/v1/recipes/', {
+            params: this.buildQueryParams(params)
+        });
+        return normalizeRecipePayload(response.data);
     },
 
     /**
@@ -43,7 +81,7 @@ export const recipeService = {
         const response = await apiClient.get('/api/v1/recipes/popular/', {
             params: { limit }
         });
-        return response.data?.results || response.data;
+        return normalizeRecipePayload(response.data?.results || response.data);
     },
 
     /**
@@ -57,7 +95,7 @@ export const recipeService = {
         }
         try {
             const response = await apiClient.get('/api/v1/recipes/recommendations/');
-            return response.data;
+            return normalizeRecipePayload(response.data);
         } catch (error: any) {
             // Return empty array if not authenticated or error occurs
             return [];
@@ -77,7 +115,7 @@ export const recipeService = {
             return MOCK_RECIPES[0];
         }
         const response = await apiClient.get(`/api/v1/recipes/${id}/`);
-        return response.data;
+        return normalizeRecipePayload(response.data);
     },
 
     /**
@@ -96,7 +134,7 @@ export const recipeService = {
         const response = await apiClient.get('/api/v1/recipes/', {
             params: { search: query }
         });
-        return response.data.results || response.data;
+        return normalizeRecipePayload(response.data.results || response.data);
     },
 
     /**
@@ -114,30 +152,16 @@ export const recipeService = {
             const { MOCK_RECIPES } = await import('@/data/mockData');
             return MOCK_RECIPES; // Return all for now or implement client filtering if needed
         }
-        const params: any = {};
-
-        if (filters.cuisine && filters.cuisine.length > 0) {
-            params.cuisine = filters.cuisine.join(',');
-        }
-        if (filters.diet && filters.diet.length > 0) {
-            params.diet = filters.diet.join(',');
-        }
-        if (filters.meal_types && filters.meal_types.length > 0) {
-            // Backend expects 'tags' for meal types (and other tags)
-            // Using getlist in backend implies tags=A&tags=B format, 
-            // but many standard serializers use standard array handling.
-            // Let's pass array directly, axios/client usually handles it.
-            params.tags = filters.meal_types;
-        }
-        if (filters.max_time) {
-            params.max_time = filters.max_time;
-        }
-        if (filters.min_time !== undefined) {
-            params.min_time = filters.min_time;
-        }
-
-        const response = await apiClient.get('/api/v1/recipes/', { params });
-        return response.data.results || response.data;
+        const response = await apiClient.get('/api/v1/recipes/', {
+            params: this.buildQueryParams({
+                cuisine: filters.cuisine,
+                diet: filters.diet,
+                tags: filters.meal_types,
+                max_time: filters.max_time,
+                min_time: filters.min_time,
+            })
+        });
+        return normalizeRecipePayload(response.data.results || response.data);
     },
 
     /**
@@ -155,13 +179,14 @@ export const recipeService = {
         try {
             // The backend might filter by recipe_meal_type or we fetch all and filter
             const response = await apiClient.get('/api/v1/recipes/', {
-                params: {
-                    limit: 20
-                }
+                params: this.buildQueryParams({
+                    tags: mealType,
+                    limit: 20,
+                })
             });
 
             // Client-side filtering by meal type
-            const allRecipes = response.data.results || response.data;
+            const allRecipes = normalizeRecipePayload(response.data.results || response.data);
             const filtered = allRecipes.filter((recipe: Recipe) =>
                 recipe.recipe_meal_type?.includes(mealType.toLowerCase())
             );
@@ -242,12 +267,12 @@ export const recipeService = {
         }
         try {
             const response = await apiClient.get('/api/v1/recipes/bookmarks/');
-            return response.data;
+            return normalizeRecipePayload(response.data);
         } catch (error: any) {
             try {
                 // Fallback for now if 404
                 const response = await apiClient.get('/api/v1/recipes/');
-                const recipes = response.data.results || response.data;
+                const recipes = normalizeRecipePayload(response.data.results || response.data);
                 return recipes.filter((r: Recipe) => r.is_bookmarked);
             } catch (e) {
                 return [];
@@ -265,7 +290,7 @@ export const recipeService = {
         }
         try {
             const response = await apiClient.get('/api/v1/recipes/liked/');
-            return response.data;
+            return normalizeRecipePayload(response.data);
         } catch (error: any) {
             return [];
         }
@@ -287,8 +312,9 @@ export const recipeService = {
             });
 
             // If we have results, return them
-            if (response.data && response.data.length > 0) {
-                return { recipes: response.data, usedFallback: false };
+            const normalized = normalizeRecipePayload(response.data);
+            if (normalized && normalized.length > 0) {
+                return { recipes: normalized, usedFallback: false };
             }
 
             // Fallback: Get popular recipes instead
@@ -328,8 +354,9 @@ export const recipeService = {
             });
 
             // If we have results, return them
-            if (response.data && response.data.length > 0) {
-                return { recipes: response.data, usedFallback: false };
+            const normalized = normalizeRecipePayload(response.data);
+            if (normalized && normalized.length > 0) {
+                return { recipes: normalized, usedFallback: false };
             }
 
             // Fallback: Get popular recipes for any meal type

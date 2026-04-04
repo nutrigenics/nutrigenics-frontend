@@ -24,6 +24,7 @@ interface RecipeDataShape {
   recipe_time_minutes?: number | string;
   nutrients?: Record<string, number | string>;
   ingredients?: string[];
+  instructions?: string[];
   recipe_image?: string | null;
   recipe_nutrient_set?: Array<{
     nutrient?: { name?: string; unit?: string };
@@ -104,11 +105,19 @@ const toNumber = (value: unknown): number => {
 const mapRecipeDataToRecipe = (recipeData: RecipeDataShape): Recipe => ({
   id: toNumber(recipeData.recipe_id),
   name: recipeData.recipe_name || 'Recipe',
+  image: recipeData.recipe_image || `/media/recipe_images/${(recipeData.recipe_name || '').replace(/ /g, '_')}_${String(recipeData.recipe_id || '').padStart(7, '0')}.png`,
   time: recipeData.recipe_time_minutes ? `${recipeData.recipe_time_minutes} min` : '15 min',
   calories: toNumber(recipeData.nutrients?.Calories || recipeData.nutrients?.Energy),
   recipe_image: recipeData.recipe_image || `/media/recipe_images/${(recipeData.recipe_name || '').replace(/ /g, '_')}_${String(recipeData.recipe_id || '').padStart(7, '0')}.png`,
   recipe_name: recipeData.recipe_name || 'Recipe',
   recipe_time_minutes: toNumber(recipeData.recipe_time_minutes),
+  ingredients: Array.isArray(recipeData.ingredients)
+    ? recipeData.ingredients.map((ing) => ({
+      ingredient_name: ing,
+      quantity: ''
+    }))
+    : [],
+  instructions: Array.isArray(recipeData.instructions) ? recipeData.instructions : [],
   recipe_ingredient_set: Array.isArray(recipeData.ingredients)
     ? recipeData.ingredients.map((ing, index) => ({ id: index + 1, ingredient_name: ing, quantity: '' }))
     : [],

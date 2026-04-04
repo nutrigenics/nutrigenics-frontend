@@ -25,22 +25,8 @@ import { recipeService } from "@/services/recipe.service";
 import { NutritionGrid } from "@/components/recipes/NutritionGrid";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-
-// --- Types ---
-interface Recipe {
-  id: number;
-  name: string;
-  image: string;
-  time: string;
-  calories: number;
-  servings: number;
-  ingredients: (string | { ingredient_name: string; quantity: string })[];
-  instructions: string[];
-  nutrition_facts?: any;
-  tags?: (string | { id: number; name: string })[];
-  is_liked?: boolean;
-  is_bookmarked?: boolean;
-}
+import type { Recipe } from "@/types";
+import { getRecipeNutrientValue } from "@/utils/recipe";
 
 export default function RecipeDetailPage() {
   const { id } = useParams();
@@ -124,12 +110,7 @@ export default function RecipeDetailPage() {
   };
 
   const getNutrientValue = (name: string): number => {
-    if (!recipe?.nutrition_facts) return 0;
-    const nutrient = recipe.nutrition_facts.find((n: any) =>
-      n.name.toLowerCase() === name.toLowerCase() ||
-      n.label?.toLowerCase() === name.toLowerCase()
-    );
-    return nutrient ? parseFloat(nutrient.amount) : 0;
+    return getRecipeNutrientValue(recipe, name);
   };
 
   if (loading) {
@@ -286,7 +267,7 @@ export default function RecipeDetailPage() {
               <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
                 <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Ingredients</h2>
                 <span className="text-sm font-medium text-gray-400">
-                  {recipe.ingredients.length} items
+                  {(recipe.ingredients || []).length} items
                 </span>
               </div>
 

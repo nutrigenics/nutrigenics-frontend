@@ -126,7 +126,7 @@ export default function DietitianPatientDetailsPage() {
                     analyticsService.getWeightHistory(days, patientId),
                     analyticsService.getDailyHistory(180, patientId),
                     analyticsService.getMealDistribution(days, patientId),
-                    vitalSignsService.getRecentSymptoms()
+                    vitalSignsService.getRecentSymptoms(patientId)
                 ]);
                 setStats(statsData);
                 setCompliance(complianceData);
@@ -138,7 +138,7 @@ export default function DietitianPatientDetailsPage() {
 
                 // Fetch water history separately (endpoint may not exist)
                 try {
-                    const waterData = await vitalSignsService.getWaterHistory(days);
+                    const waterData = await vitalSignsService.getWaterHistory(days, patientId);
                     setWaterHistory(waterData);
                 } catch {
                     // Water history endpoint not available - chart will show "No data"

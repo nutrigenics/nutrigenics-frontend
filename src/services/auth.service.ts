@@ -65,7 +65,10 @@ export const authService = {
      * Signup new user
      */
     async signup(data: SignupFormData) {
-        const response = await apiClient.post('/api/v1/auth/signup/', data);
+        const response = await apiClient.post('/api/v1/auth/register/', {
+            ...data,
+            password_confirm: data.password2
+        });
         return response.data;
     },
 

@@ -136,7 +136,7 @@ export const referenceService = {
     async getActiveHospitals(): Promise<HospitalOption[]> {
         try {
             const response = await apiClient.get('/api/v1/hospitals/list_active/');
-            return response.data;
+            return response.data.hospitals || response.data;
         } catch (error) {
             console.warn('Failed to fetch hospitals:', error);
             return [];

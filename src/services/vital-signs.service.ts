@@ -47,8 +47,13 @@ const vitalSignsService = {
         return response.data;
     },
 
-    getWaterHistory: async (days: number = 7) => {
-        const response = await apiClient.get<any>(`/api/v1/water-logs/history/?days=${days}`);
+    getWaterHistory: async (days: number = 7, patientId?: number | string) => {
+        const response = await apiClient.get<any>('/api/v1/water-logs/history/', {
+            params: {
+                days,
+                ...(patientId ? { patient_id: patientId } : {}),
+            }
+        });
         return Array.isArray(response.data) ? response.data : response.data.results || [];
     },
 
@@ -58,8 +63,10 @@ const vitalSignsService = {
         return Array.isArray(response.data) ? response.data : response.data.results || [];
     },
 
-    getRecentSymptoms: async () => {
-        const response = await apiClient.get<any>('/api/v1/symptom-logs/');
+    getRecentSymptoms: async (patientId?: number | string) => {
+        const response = await apiClient.get<any>('/api/v1/symptom-logs/', {
+            params: patientId ? { patient_id: patientId } : undefined
+        });
         return Array.isArray(response.data) ? response.data : response.data.results || [];
     },
 

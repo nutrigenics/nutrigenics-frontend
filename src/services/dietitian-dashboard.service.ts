@@ -33,7 +33,7 @@ export const dietitianDashboardService = {
     },
 
     async requestPatient(data: { patient_id: string; message?: string }) {
-        const response = await apiClient.post('/api/v1/dietitians/request-patient/', data);
+        const response = await apiClient.post('/api/v1/dietitians/request_patient/', data);
         return response.data;
     },
 

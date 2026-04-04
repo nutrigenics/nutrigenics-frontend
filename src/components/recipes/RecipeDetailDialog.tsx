@@ -1,18 +1,19 @@
 
-import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Clock, Flame, ChefHat, X, Heart, Bookmark, Plus } from "lucide-react";
 import { NutritionGrid } from "@/components/recipes/NutritionGrid";
 import { cn } from "@/lib/utils";
 import type { Recipe } from "@/types";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { planService } from "@/services/plan.service";
 import { recipeService } from "@/services/recipe.service";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getRecipeNutrientValue } from "@/utils/recipe";
 
 interface RecipeDetailDialogProps {
     recipe: Recipe | null;
@@ -31,24 +32,23 @@ export function RecipeDetailDialog({ recipe, open, onOpenChange }: RecipeDetailD
     const [isLiked, setIsLiked] = useState(recipe?.is_liked || false);
     const [isBookmarked, setIsBookmarked] = useState(recipe?.is_bookmarked || false);
 
+    useEffect(() => {
+        setIsLiked(recipe?.is_liked || false);
+        setIsBookmarked(recipe?.is_bookmarked || false);
+    }, [recipe?.id, recipe?.is_liked, recipe?.is_bookmarked]);
+
     if (!recipe) return null;
 
     const getNutrientValue = (name: string): number => {
-        // @ts-ignore
-        if (!recipe?.nutrition_facts) return 0;
-        // @ts-ignore
-        const nutrient = recipe.nutrition_facts.find((n: any) =>
-            n.name.toLowerCase() === name.toLowerCase() ||
-            n.label?.toLowerCase() === name.toLowerCase()
-        );
-        return nutrient ? parseFloat(nutrient.amount) : 0;
+        return getRecipeNutrientValue(recipe, name);
     };
 
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-    const imageUrl = recipe.image
-        ? recipe.image.startsWith('http')
-            ? recipe.image
-            : `${API_BASE_URL}${recipe.image}`
+    const rawImage = recipe.image || recipe.recipe_image || '';
+    const imageUrl = rawImage
+        ? rawImage.startsWith('http')
+            ? rawImage
+            : `${API_BASE_URL}${rawImage}`
         : '';
 
     const handleAddToPlan = async () => {

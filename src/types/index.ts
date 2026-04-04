@@ -145,6 +145,12 @@ export interface Recipe {
     protein?: number;
     carbs?: number;
     fat?: number;
+    nutrition_facts?: Array<{
+        name: string;
+        label?: string;
+        amount: string;
+        unit?: string;
+    }>;
     recipe_nutrient_set?: RecipeNutrient[];
     nutrients?: RecipeNutrient[];
 }

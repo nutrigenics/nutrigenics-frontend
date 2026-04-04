@@ -33,6 +33,6 @@ export const hospitalDashboardService = {
     // Reference Lists
     async listActive() {
         const response = await apiClient.get<Hospital[]>('/api/v1/hospitals/list_active/');
-        return response.data;
+        return (response.data as unknown as { hospitals?: Hospital[] }).hospitals || response.data;
     }
 };
