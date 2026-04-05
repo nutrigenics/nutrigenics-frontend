@@ -17,6 +17,7 @@ import useWebSocket, { ReadyState } from 'react-use-websocket';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import apiClient from '@/services/api.client';
 
 interface RecipeDataShape {
   recipe_id?: number | string;
@@ -72,6 +73,19 @@ interface ChatSocketMessage {
   recipes_found?: number;
   recipes?: RecipeDataShape[];
   visualization?: unknown;
+  components?: AssistantComponent[];
+  pending_components?: boolean;
+}
+
+interface ChatHttpResponse {
+  type: 'response' | 'error';
+  session_id?: string;
+  request_id?: string;
+  message?: string;
+  mode?: string;
+  success?: boolean;
+  recipes_found?: number;
+  recipes?: RecipeDataShape[];
   components?: AssistantComponent[];
   pending_components?: boolean;
 }
@@ -186,6 +200,7 @@ export default function AIChatPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [showRecipeDialog, setShowRecipeDialog] = useState(false);
+  const [useHttpFallback, setUseHttpFallback] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -195,6 +210,9 @@ export default function AIChatPage() {
   const sessionIdRef = useRef<string>('');
   const activeRequestIdRef = useRef<string | null>(null);
   const completedRequestIdsRef = useRef<Set<string>>(new Set());
+  const useHttpFallbackRef = useRef(false);
+  const hasConnectedOnceRef = useRef(false);
+  const fallbackAnnouncedRef = useRef(false);
 
   // Voice Input Hook
   const {
@@ -220,6 +238,23 @@ export default function AIChatPage() {
     setStreamingMessageId(value);
   };
 
+  const enableHttpFallback = () => {
+    if (useHttpFallbackRef.current) {
+      return;
+    }
+
+    useHttpFallbackRef.current = true;
+    setUseHttpFallback(true);
+    syncStreamingMessageId(null);
+    setIsLoading(false);
+    setStatusMessage('');
+
+    if (!fallbackAnnouncedRef.current) {
+      fallbackAnnouncedRef.current = true;
+      toast.error('Realtime chat unavailable. Using standard mode.');
+    }
+  };
+
   // Handle manual input changes interacting with voice
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
@@ -243,15 +278,29 @@ export default function AIChatPage() {
 
   // WebSocket Hook
   const { sendMessage, lastJsonMessage, readyState } = useWebSocket(SOCKET_URL, {
-    shouldReconnect: () => true,
+    shouldReconnect: () => !useHttpFallbackRef.current,
     reconnectAttempts: 10,
     reconnectInterval: 1000,
-    onOpen: () => toast.success('Connected to AI Assistant'),
-    onClose: () => console.log("Disconnected"),
-    onError: (e) => console.error("WebSocket Error", e),
+    onOpen: () => {
+      hasConnectedOnceRef.current = true;
+      toast.success('Connected to AI Assistant');
+    },
+    onClose: (event) => {
+      console.log("Disconnected", event);
+      if (!hasConnectedOnceRef.current) {
+        enableHttpFallback();
+      }
+    },
+    onError: (e) => {
+      console.error("WebSocket Error", e);
+      if (!hasConnectedOnceRef.current) {
+        enableHttpFallback();
+      }
+    },
   });
 
   const isConnected = readyState === ReadyState.OPEN;
+  const canSendMessages = (!!inputValue.trim() || !!selectedImage) && !isLoading && (isConnected || useHttpFallback);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -451,7 +500,7 @@ export default function AIChatPage() {
   }, [inputValue]);
 
   const handleSendMessage = async () => {
-    if ((!inputValue.trim() && !selectedImage) || !isConnected || isLoading) return;
+    if ((!inputValue.trim() && !selectedImage) || isLoading || (!isConnected && !useHttpFallback)) return;
 
     stopListening(); // Stop recording if active
     const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -482,7 +531,62 @@ export default function AIChatPage() {
       request_id: requestId,
     };
 
-    sendMessage(JSON.stringify(payload));
+    if (useHttpFallback) {
+      try {
+        const response = await apiClient.post<ChatHttpResponse>('/api/v1/chat/query/', payload);
+        const data = response.data;
+        const recipeResults = Array.isArray(data.recipes) ? data.recipes : [];
+        const serverComponents = Array.isArray(data.components) ? data.components : [];
+        const resolvedComponents = serverComponents.length > 0
+          ? serverComponents
+          : buildFallbackRecipeComponents(recipeResults, data.recipes_found);
+
+        setMessages(prev => [
+          ...prev.map((msg) => (
+            msg.role === 'assistant' && msg.metadata?.pending_components
+              ? {
+                ...msg,
+                metadata: {
+                  ...msg.metadata,
+                  pending_components: false
+                }
+              }
+              : msg
+          )),
+          {
+            id: `${Date.now()}-assistant`,
+            role: 'assistant',
+            content: data.message || '',
+            timestamp: new Date(),
+            metadata: {
+              request_id: data.request_id,
+              mode: data.mode,
+              recipes_found: data.recipes_found,
+              recipes: recipeResults,
+              components: resolvedComponents,
+              pending_components: false,
+            },
+            isStreaming: false,
+          }
+        ]);
+
+        if (data.request_id) {
+          completedRequestIdsRef.current.add(data.request_id);
+          if (completedRequestIdsRef.current.size > 200) {
+            completedRequestIdsRef.current.clear();
+          }
+        }
+      } catch (error) {
+        console.error("HTTP chat fallback failed", error);
+        toast.error('Something went wrong while processing your request.');
+      } finally {
+        setIsLoading(false);
+        setStatusMessage('');
+        activeRequestIdRef.current = null;
+      }
+    } else {
+      sendMessage(JSON.stringify(payload));
+    }
 
     setInputValue('');
     resetTranscript(); // Reset voice transcript
@@ -700,11 +804,11 @@ export default function AIChatPage() {
         <Button
           size="icon"
           onClick={handleSendMessage}
-          disabled={(!inputValue.trim() && !selectedImage) || !isConnected || isLoading}
+          disabled={!canSendMessages}
           aria-label="Send chat message"
           className={cn(
             "h-9 w-9 rounded-full transition-all duration-200",
-            (inputValue.trim() || selectedImage) && isConnected ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transform hover:scale-105" : "bg-muted text-muted-foreground"
+            canSendMessages ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transform hover:scale-105" : "bg-muted text-muted-foreground"
           )}
         >
           <Send className="w-4 h-4 ml-0.5" />
@@ -742,11 +846,15 @@ export default function AIChatPage() {
             {/* Input Box */}
             {renderInputBox()}
 
-            {!isConnected && (
+            {useHttpFallback ? (
+              <div className="text-center mt-2">
+                <span className="text-xs text-amber-700 bg-amber-100 px-2 py-1 rounded-full">Realtime unavailable, using standard mode</span>
+              </div>
+            ) : !isConnected ? (
               <div className="text-center mt-2">
                 <span className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded-full">Server disconnected</span>
               </div>
-            )}
+            ) : null}
 
             {/* Sample Queries */}
             <motion.div
@@ -1035,11 +1143,15 @@ export default function AIChatPage() {
         <div className="max-w-3xl mx-auto px-4 py-4">
           {renderInputBox()}
 
-          {!isConnected && (
+          {useHttpFallback ? (
+            <div className="text-center mt-2">
+              <span className="text-xs text-amber-700 bg-amber-100 px-2 py-1 rounded-full">Realtime unavailable, using standard mode</span>
+            </div>
+          ) : !isConnected ? (
             <div className="text-center mt-2">
               <span className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded-full">Server disconnected</span>
             </div>
-          )}
+          ) : null}
 
           <p className="text-center text-xs text-muted-foreground mt-3">
             AI can make mistakes. Verify important info.
