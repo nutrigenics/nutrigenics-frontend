@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { cn } from '@/lib/utils';
 import type { NutrientStats, AdvancedStats, WeightHistory, MealDistribution } from '@/services/analytics.service';
 import type { Patient } from '@/types';
-import { getNutrientTargets } from '@/utils/nutrition';
+import { formatMacroTargetSplitLabel, getNutrientTargets } from '@/utils/nutrition';
 import { WeightTrendChart } from './charts/WeightTrendChart';
 import { NutrientTrendChart } from './charts/NutrientTrendChart';
 import { CalorieCompositionChart } from './charts/CalorieCompositionChart';
@@ -13,7 +13,7 @@ import FoodMoodChart from './FoodMoodChart';
 import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, RadarChart,
     PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ReferenceLine,
-    XAxis, YAxis, CartesianGrid
+    XAxis, YAxis, CartesianGrid, ComposedChart, Line
 } from 'recharts';
 import { Scale, Brain, Heart } from 'lucide-react';
 import { type SymptomLog } from '@/services/vital-signs.service';
@@ -75,6 +75,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                         if (color && color.startsWith('url(')) {
                             color = GRADIENT_COLOR_MAP[color] || '#6b7280';
                         }
+                        if (p.value === null || p.value === undefined) {
+                            return null;
+                        }
                         return (
                             <div key={p.name || p.dataKey} className="flex items-center gap-2 text-xs">
                                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color || '#6b7280' }} />
@@ -98,23 +101,32 @@ export function DietitianAnalyticsView({
 
     // Calculate Targets
     const t = getNutrientTargets(currentPatient, advancedStats?.tdee);
+    const targetMacroLabel = useMemo(() => formatMacroTargetSplitLabel(t), [t]);
 
-    // Symptom chart data - group by symptom type and calculate average severity
-    const symptomChartData = useMemo(() => {
-        const grouped = symptomHistory.reduce((acc, log) => {
-            const name = log.symptom_type_details?.name || 'Unknown';
-            if (!acc[name]) acc[name] = { count: 0, totalSeverity: 0 };
-            acc[name].count++;
-            acc[name].totalSeverity += log.severity;
+    const symptomTimelineData = useMemo(() => {
+        if (!stats?.dates.length) return [];
+
+        const logsByDate = symptomHistory.reduce((acc, log) => {
+            if (!log.date) return acc;
+            const dateKey = log.date.substring(0, 10);
+            if (!acc[dateKey]) acc[dateKey] = [];
+            acc[dateKey].push(log);
             return acc;
-        }, {} as Record<string, { count: number; totalSeverity: number }>);
+        }, {} as Record<string, SymptomLog[]>);
 
-        return Object.entries(grouped).map(([name, data]) => ({
-            name,
-            avgSeverity: data.totalSeverity / data.count,
-            count: data.count
-        }));
-    }, [symptomHistory]);
+        return stats.dates.map((date) => {
+            const logs = logsByDate[date] || [];
+            const avgSeverity = logs.length
+                ? logs.reduce((sum, log) => sum + log.severity, 0) / logs.length
+                : null;
+
+            return {
+                date: new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+                avgSeverity,
+                symptomCount: logs.length,
+            };
+        });
+    }, [stats, symptomHistory]);
 
     // Calorie composition for chart
     const avgProtein = useMemo(() => (stats?.macro_nutrients.find(n => n.name === 'Protein')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
@@ -199,6 +211,7 @@ export function DietitianAnalyticsView({
                         avgCarbs={avgCarbs}
                         avgFat={avgFat}
                         totalKcal={advancedStats?.avg_daily_intake || 0}
+                        targetLabel={targetMacroLabel}
                         className="border-slate-100 shadow-sm bg-white rounded-2xl"
                     />
 
@@ -302,21 +315,21 @@ export function DietitianAnalyticsView({
                         </CardContent>
                     </Card>
 
-                    {/* Symptom History Chart */}
+                    {/* Symptom Timeline Chart */}
                     <Card className="h-[360px] shadow-sm bg-white border-slate-100 rounded-2xl">
                         <CardHeader className="pb-2">
                             <CardTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
                                 <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                 </svg>
-                                Symptom History
+                                Symptom Timeline
                             </CardTitle>
-                            <CardDescription className="text-xs">Patient-reported symptoms</CardDescription>
+                            <CardDescription className="text-xs">Daily average severity and number of symptom logs</CardDescription>
                         </CardHeader>
                         <CardContent className="h-[280px]">
                             {symptomHistory.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={symptomChartData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+                                    <ComposedChart data={symptomTimelineData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
                                         <defs>
                                             <linearGradient id="gradSymptom" x1="0" y1="0" x2="0" y2="1">
                                                 <stop offset="0%" stopColor="#f43f5e" stopOpacity={0.9} />
@@ -324,11 +337,24 @@ export function DietitianAnalyticsView({
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
-                                        <XAxis dataKey="name" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} angle={-20} textAnchor="end" height={50} />
-                                        <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} domain={[0, 10]} label={{ value: 'Severity', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#64748b' }} />
+                                        <XAxis
+                                            dataKey="date"
+                                            tick={{ fontSize: 9 }}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            interval={0}
+                                            tickFormatter={(value, index) => {
+                                                if (days <= 7) return value;
+                                                if (days <= 30) return index % 3 === 0 ? value : '';
+                                                return index % 6 === 0 ? value : '';
+                                            }}
+                                        />
+                                        <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} domain={[0, 10]} label={{ value: 'Severity', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#64748b' }} />
+                                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} label={{ value: 'Logs', angle: 90, position: 'insideRight', fontSize: 10, fill: '#64748b' }} />
                                         <Tooltip content={<CustomTooltip />} />
-                                        <Bar dataKey="avgSeverity" name="Avg Severity" fill="url(#gradSymptom)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                                    </BarChart>
+                                        <Bar yAxisId="right" dataKey="symptomCount" name="Symptom Logs" fill="#fecdd3" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                                        <Line yAxisId="left" type="monotone" dataKey="avgSeverity" name="Avg Severity" stroke="#e11d48" strokeWidth={2.5} connectNulls={false} dot={{ r: 3, fill: '#e11d48', stroke: '#fff', strokeWidth: 1 }} />
+                                    </ComposedChart>
                                 </ResponsiveContainer>
                             ) : (
                                 <div className="h-full flex items-center justify-center text-sm text-slate-400">
@@ -357,7 +383,11 @@ export function DietitianAnalyticsView({
                 {/* Food-Mood Correlation - Full Width */}
                 <FoodMoodChart
                     dates={stats?.dates || []}
-                    microNutrients={[...(stats?.macro_nutrients || []), ...(stats?.micro_nutrients || [])]}
+                    nutrients={[
+                        ...(stats?.macro_nutrients || []),
+                        ...(stats?.micro_nutrients || []),
+                        ...(stats?.limiting_nutrients || []),
+                    ]}
                     symptomLogs={symptomHistory}
                 />
 

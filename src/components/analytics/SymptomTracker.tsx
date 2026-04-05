@@ -30,7 +30,11 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 
-export default function SymptomTracker() {
+interface SymptomTrackerProps {
+    onSymptomLogged?: () => Promise<void> | void;
+}
+
+export default function SymptomTracker({ onSymptomLogged }: SymptomTrackerProps) {
     const [types, setTypes] = useState<SymptomType[]>([]);
     const [history, setHistory] = useState<SymptomLog[]>([]);
     const [selectedType, setSelectedType] = useState<string>('');
@@ -66,7 +70,8 @@ export default function SymptomTracker() {
             toast.success("Symptom Logged", {
                 description: "Your biofeedback has been recorded.",
             });
-            fetchMetadata();
+            await fetchMetadata();
+            await onSymptomLogged?.();
             setSeverity([1]);
             setSelectedType('');
         } catch (error) {

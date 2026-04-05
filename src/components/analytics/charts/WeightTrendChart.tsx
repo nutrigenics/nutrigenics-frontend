@@ -5,9 +5,9 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    Area,
     ComposedChart,
-    Legend
+    Legend,
+    Line
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Scale } from 'lucide-react';
@@ -29,16 +29,19 @@ const formatAxisValue = (value: number): string => {
 
 export function WeightTrendChart({ weightHistory, days: _days, className }: WeightTrendChartProps) {
     if (!weightHistory) return null;
+    const days = _days;
 
     const weightChartData = weightHistory.dates.map((date, i) => ({
         date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         weight: weightHistory.weights[i],
-        calories: weightHistory.calories[i]
+        calories: weightHistory.calories[i],
+        measured: weightHistory.measured?.[i] ?? weightHistory.weights[i] !== null
     }));
 
-    const hasData = weightChartData.length > 0 && weightChartData.some(d => d.weight !== null && d.weight !== undefined && d.weight > 0);
-    const startWeight = weightChartData.find(d => d.weight)?.weight;
-    const endWeight = [...weightChartData].reverse().find(d => d.weight)?.weight;
+    const recordedEntries = weightChartData.filter((entry) => entry.measured && entry.weight !== null && entry.weight !== undefined);
+    const hasData = recordedEntries.length > 0;
+    const startWeight = recordedEntries[0]?.weight;
+    const endWeight = recordedEntries[recordedEntries.length - 1]?.weight;
 
     return (
         <Card className={cn("shadow-sm transition-all duration-300 hover:shadow-md bg-white border border-gray-100", className)}>
@@ -47,9 +50,9 @@ export function WeightTrendChart({ weightHistory, days: _days, className }: Weig
                     <div className="space-y-1">
                         <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
                             <Scale className="w-5 h-5 text-teal-500" />
-                            Weight Progression vs Intake
+                            Recorded Weight vs Intake
                         </CardTitle>
-                        <CardDescription>Calories vs Weight</CardDescription>
+                        <CardDescription>Only logged weigh-ins are plotted against daily calories.</CardDescription>
                     </div>
                     {/* Weight Insight */}
                     <div className="flex items-center gap-4 text-sm hidden md:flex">
@@ -87,8 +90,14 @@ export function WeightTrendChart({ weightHistory, days: _days, className }: Weig
                                 tick={{ fontSize: 11, fill: '#64748b' }}
                                 tickLine={false}
                                 axisLine={false}
-                                minTickGap={40}
+                                interval={0}
                                 dy={10}
+                                tickFormatter={(value, index) => {
+                                    if (days <= 7) return value;
+                                    if (days <= 30) return index % 3 === 0 ? value : '';
+                                    if (days <= 60) return index % 6 === 0 ? value : '';
+                                    return index % 14 === 0 ? value : '';
+                                }}
                             />
                             <YAxis
                                 yAxisId="left"
@@ -121,22 +130,21 @@ export function WeightTrendChart({ weightHistory, days: _days, className }: Weig
                                 radius={50}
                                 maxBarSize={40}
                             />
-                            <Area
+                            <Line
                                 yAxisId="left"
                                 type="monotone"
                                 dataKey="weight"
-                                name="Weight"
-                                stroke="url(#gradWeight)"
+                                name="Recorded Weight"
+                                stroke={COLORS.weight.start}
                                 strokeWidth={3}
-                                fill="url(#gradWeight)"
-                                fillOpacity={0.15}
-                                dot={false}
+                                connectNulls
+                                dot={{ r: 4, fill: COLORS.weight.start, stroke: '#fff', strokeWidth: 2 }}
                                 activeDot={{ r: 6, fill: COLORS.weight.start, stroke: '#fff', strokeWidth: 2 }}
                             />
                         </ComposedChart>
                     </ResponsiveContainer>
                 ) : (
-                    <div className="flex items-center justify-center h-full text-gray-400">No weight data available</div>
+                    <div className="flex items-center justify-center h-full text-gray-400">No recorded weight logs available</div>
                 )}
             </CardContent>
         </Card>

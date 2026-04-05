@@ -18,6 +18,10 @@ export const CustomTooltip = ({ active, payload, label }: any) => {
                             ? p.payload[originalName]
                             : p.value;
 
+                        if (displayValue === null || displayValue === undefined) {
+                            return null;
+                        }
+
                         return (
                             <div key={p.name} className="flex items-center gap-2 text-sm">
                                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color || p.payload?.fill || p.payload?.color }} />
@@ -25,6 +29,7 @@ export const CustomTooltip = ({ active, payload, label }: any) => {
                                 <span className="font-semibold text-gray-900">
                                     {Number(displayValue).toFixed(1)}
                                     {['Calories', 'Target'].includes(originalName) ? ' kcal' :
+                                        originalName === 'Weight' || originalName === 'Recorded Weight' ? ' kg' :
                                         ['Sodium', 'Cholesterol'].includes(originalName) ? ' mg' : 'g'}
                                     {isPct && <span className="text-xs text-gray-400 ml-1">({Number(p.value).toFixed(0)}%)</span>}
                                 </span>

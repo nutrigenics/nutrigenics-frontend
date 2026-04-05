@@ -1,5 +1,7 @@
 import apiClient from './api.client';
 
+export type AnalyticsPeriod = 'weekly' | 'monthly' | '60days' | 'all';
+
 export interface NutrientStats {
     dates: string[];
     weekdays?: string[];
@@ -76,13 +78,14 @@ export interface AdvancedStats {
 
 export interface WeightHistory {
     dates: string[];
-    weights: number[];
+    weights: Array<number | null>;
     calories: number[];
+    measured?: boolean[];
 }
 
 export const analyticsService = {
     // ... previous methods ...
-    async getPatientAnalytics(period: 'weekly' | 'monthly' | '60days' | 'all' = 'weekly', patientId?: string): Promise<NutrientStats> {
+    async getPatientAnalytics(period: AnalyticsPeriod = 'weekly', patientId?: string): Promise<NutrientStats> {
         if (localStorage.getItem('is_guest_mode') === 'true') {
             const { MOCK_NUTRIENT_STATS } = await import('@/data/mockData');
 
@@ -113,16 +116,18 @@ export const analyticsService = {
         return response.data;
     },
 
-    async getComplianceStats(patientId?: string): Promise<ComplianceStats> {
+    async getComplianceStats(days: number = 30, patientId?: string): Promise<ComplianceStats> {
         if (localStorage.getItem('is_guest_mode') === 'true') {
+            const safeDays = Math.max(days, 1);
+            const plannedDays = Math.round(safeDays * 0.85);
             return {
                 compliance_rate: 85,
-                planned_days: 7,
-                total_days: 7,
-                streak: 4
+                planned_days: plannedDays,
+                total_days: safeDays,
+                streak: Math.min(4, safeDays)
             };
         }
-        const params: any = { period: 'compliance' };
+        const params: any = { period: 'compliance', days };
         if (patientId) params.patient_id = patientId;
 
         const response = await apiClient.get('/api/analytics/patient/', { params });
@@ -184,17 +189,20 @@ export const analyticsService = {
 
     async getWeightHistory(days: number = 30, patientId?: string): Promise<WeightHistory> {
         if (localStorage.getItem('is_guest_mode') === 'true') {
-            // Basic mock
             const count = days;
             const dates = Array.from({ length: count }, (_, i) => {
                 const d = new Date();
                 d.setDate(d.getDate() - (count - 1 - i));
                 return d.toISOString().split('T')[0];
             });
+            const measured = Array.from({ length: count }, (_, i) => i === 0 || i === count - 1 || i % 7 === 0);
             return {
                 dates,
-                weights: Array(count).fill(70).map((w, i) => w - (i * 0.05)),
-                calories: Array(count).fill(2000).map(c => c + (Math.random() * 400 - 200))
+                weights: Array.from({ length: count }, (_, i) => (
+                    measured[i] ? Number((70 - (i * 0.05)).toFixed(1)) : null
+                )),
+                calories: Array(count).fill(2000).map(c => c + (Math.random() * 400 - 200)),
+                measured,
             };
         }
         const params: any = { period: 'weight', days };

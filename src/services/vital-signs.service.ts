@@ -32,6 +32,28 @@ export interface SymptomLog {
     created_at: string;
 }
 
+async function fetchAllPages<T>(url: string, params?: Record<string, unknown>): Promise<T[]> {
+    let nextUrl: string | null = url;
+    let nextParams: Record<string, unknown> | undefined = params;
+    const results: T[] = [];
+
+    while (nextUrl) {
+        const response: { data: any } = await apiClient.get(nextUrl, { params: nextParams });
+        const data: any = response.data;
+
+        if (Array.isArray(data)) {
+            results.push(...data);
+            break;
+        }
+
+        results.push(...(data.results || []));
+        nextUrl = data.next;
+        nextParams = undefined;
+    }
+
+    return results;
+}
+
 const vitalSignsService = {
     // Water Logs
     getTodayWater: async () => {
@@ -59,15 +81,11 @@ const vitalSignsService = {
 
     // Symptoms
     getSymptomTypes: async () => {
-        const response = await apiClient.get<any>('/api/v1/symptom-types/');
-        return Array.isArray(response.data) ? response.data : response.data.results || [];
+        return fetchAllPages<SymptomType>('/api/v1/symptom-types/');
     },
 
     getRecentSymptoms: async (patientId?: number | string) => {
-        const response = await apiClient.get<any>('/api/v1/symptom-logs/', {
-            params: patientId ? { patient_id: patientId } : undefined
-        });
-        return Array.isArray(response.data) ? response.data : response.data.results || [];
+        return fetchAllPages<SymptomLog>('/api/v1/symptom-logs/', patientId ? { patient_id: patientId } : undefined);
     },
 
     logSymptom: async (data: { symptom_type: number; severity: number; notes?: string }) => {

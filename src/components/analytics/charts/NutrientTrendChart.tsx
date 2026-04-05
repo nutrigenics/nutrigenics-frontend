@@ -27,6 +27,7 @@ interface NutrientTrendChartProps {
 export function NutrientTrendChart({ data, days: _days, title, description, type, t, className }: NutrientTrendChartProps) {
     const [useNormalized, setUseNormalized] = useState(false);
     const [hiddenNutrients, setHiddenNutrients] = useState<string[]>([]);
+    const days = _days;
 
     const toggleVisibility = (e: any) => {
         const { value } = e;
@@ -134,6 +135,13 @@ export function NutrientTrendChart({ data, days: _days, title, description, type
                                 axisLine={false}
                                 dy={10}
                                 tick={{ fill: '#64748b' }}
+                                interval={0}
+                                tickFormatter={(value, index) => {
+                                    if (days <= 7) return value;
+                                    if (days <= 30) return index % 3 === 0 ? value : '';
+                                    if (days <= 60) return index % 6 === 0 ? value : '';
+                                    return index % 14 === 0 ? value : '';
+                                }}
                             />
                             {useNormalized ? (
                                 <YAxis yAxisId="left" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} unit="%" tick={{ fill: '#64748b' }} />

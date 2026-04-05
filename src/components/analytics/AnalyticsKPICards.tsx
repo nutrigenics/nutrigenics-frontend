@@ -31,6 +31,11 @@ export function AnalyticsKPICards({ patient, stats, compliance, advancedStats, d
 
     const weightKg = patient?.weight || 70;
     const proteinPerKg = avgs.protein / weightKg;
+    const targetProteinPerKg = t.protein / weightKg;
+    const recentActivity = useMemo(() => {
+        const recentCalories = stats?.calories.slice(-7) || [];
+        return Array.from({ length: 7 }, (_, index) => recentCalories[index] > 0);
+    }, [stats]);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -49,14 +54,11 @@ export function AnalyticsKPICards({ patient, stats, compliance, advancedStats, d
             >
                 <div className="mt-3">
                     <div className="flex justify-between text-xs font-bold mb-1.5">
-                        <span className="text-emerald-700">Last 7 Days Activity</span>
-                        <span className="text-gray-400">{compliance?.streak || 0} Day Streak</span>
+                        <span className="text-emerald-700">Recent Logging Activity</span>
+                        <span className="text-gray-400">{compliance?.total_days || days} Day Window</span>
                     </div>
                     <div className="flex justify-between gap-1">
-                        {Array.from({ length: 7 }).map((_, i) => {
-                            // Mock logic for activity visualization since we don't have explicit daily logs here
-                            // In a real app, check stats.dates against specific past dates
-                            const isActive = i < (compliance?.streak || 0);
+                        {recentActivity.map((isActive, i) => {
                             return (
                                 <div
                                     key={i}
@@ -119,10 +121,10 @@ export function AnalyticsKPICards({ patient, stats, compliance, advancedStats, d
                 <div className="mt-3">
                     <div className="flex justify-between text-xs font-bold mb-1.5">
                         <span className="text-emerald-700">Daily Average</span>
-                        <span className="text-gray-400">Target: 1.6 g/kg</span>
+                        <span className="text-gray-400">Target: {targetProteinPerKg.toFixed(1)} g/kg</span>
                     </div>
                     <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-teal-600 transition-all duration-700 shadow-sm" style={{ width: `${Math.min((proteinPerKg / 1.6) * 100, 100)}%` }} />
+                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-teal-600 transition-all duration-700 shadow-sm" style={{ width: `${Math.min((proteinPerKg / Math.max(targetProteinPerKg, 0.1)) * 100, 100)}%` }} />
                     </div>
                 </div>
             </AnalyticsMetricCard>

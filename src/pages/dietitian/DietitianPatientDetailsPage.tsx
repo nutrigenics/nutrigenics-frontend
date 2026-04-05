@@ -121,7 +121,7 @@ export default function DietitianPatientDetailsPage() {
                 const days = period === 'weekly' ? 7 : 30;
                 const [statsData, complianceData, advData, weightData, historyData, distributionData, symptomData] = await Promise.all([
                     analyticsService.getPatientAnalytics(period, patientId),
-                    analyticsService.getComplianceStats(patientId),
+                    analyticsService.getComplianceStats(days, patientId),
                     analyticsService.getAdvancedStats(patientId),
                     analyticsService.getWeightHistory(days, patientId),
                     analyticsService.getDailyHistory(180, patientId),

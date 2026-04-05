@@ -337,7 +337,7 @@ export default function DashboardPage() {
 
       {/* Recommended & Trending Sections */}
       {[
-        { title: "Recommended for You", subtitle: "Based on your nutritional goals", data: recommendedRecipes, link: "/recipes" },
+        { title: "Recommended for You", subtitle: "Based on your activity and saved preferences", data: recommendedRecipes, link: "/recipes" },
         { title: "Trending Now", subtitle: "Community favorites this week", data: popularRecipes, link: "/recipes" }
       ].map((section, idx) => (
         section.data.length > 0 && (
@@ -368,4 +368,3 @@ export default function DashboardPage() {
     </>
   );
 }
-

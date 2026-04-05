@@ -12,10 +12,20 @@ interface CalorieCompositionChartProps {
     avgCarbs: number; // in grams
     avgFat: number; // in grams
     totalKcal: number;
+    targetLabel?: string;
+    description?: string;
     className?: string;
 }
 
-export function CalorieCompositionChart({ avgProtein, avgCarbs, avgFat, totalKcal, className }: CalorieCompositionChartProps) {
+export function CalorieCompositionChart({
+    avgProtein,
+    avgCarbs,
+    avgFat,
+    totalKcal,
+    targetLabel,
+    description,
+    className,
+}: CalorieCompositionChartProps) {
     const macroRatioData = useMemo(() => {
         const safeTotal = totalKcal || 1;
         return [
@@ -31,7 +41,7 @@ export function CalorieCompositionChart({ avgProtein, avgCarbs, avgFat, totalKca
                 <div className="flex items-start justify-between">
                     <div className="space-y-1">
                         <CardTitle className="flex items-center gap-2">Calorie Composition</CardTitle>
-                        <CardDescription>Target: 30P / 40C / 30F</CardDescription>
+                        <CardDescription>{description || (targetLabel ? `Current average split. Personal target: ${targetLabel}` : 'Current average macro split')}</CardDescription>
                     </div>
                     <Info className="w-5 h-5 text-gray-300" />
                 </div>

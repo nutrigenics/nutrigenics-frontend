@@ -14,6 +14,12 @@ export interface NutrientTargets {
     trans_fat: number;
 }
 
+export interface MacroTargetSplit {
+    proteinPct: number;
+    carbsPct: number;
+    fatPct: number;
+}
+
 /**
  * Calculates or retrieves nutrient targets for a patient.
  * Priority: 
@@ -97,6 +103,24 @@ export const getNutrientTargets = (patient: Patient | null, tdeeOverride?: numbe
         unsaturated_fat: 50,
         trans_fat: 2,
     };
+};
+
+export const getMacroTargetSplit = (targets: NutrientTargets): MacroTargetSplit => {
+    const proteinKcal = targets.protein * 4;
+    const carbsKcal = targets.carbs * 4;
+    const fatKcal = targets.fat * 9;
+    const totalMacroKcal = proteinKcal + carbsKcal + fatKcal || 1;
+
+    return {
+        proteinPct: Math.round((proteinKcal / totalMacroKcal) * 100),
+        carbsPct: Math.round((carbsKcal / totalMacroKcal) * 100),
+        fatPct: Math.round((fatKcal / totalMacroKcal) * 100),
+    };
+};
+
+export const formatMacroTargetSplitLabel = (targets: NutrientTargets): string => {
+    const split = getMacroTargetSplit(targets);
+    return `${split.proteinPct}P / ${split.carbsPct}C / ${split.fatPct}F`;
 };
 
 /**

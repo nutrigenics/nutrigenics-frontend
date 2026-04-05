@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResponsiveContainer, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { Brain, Info } from 'lucide-react';
+import type { SymptomLog } from '@/services/vital-signs.service';
 import {
     Tooltip as ShadTooltip,
     TooltipContent,
@@ -18,32 +19,79 @@ import {
 
 interface FoodMoodProps {
     dates: string[];
-    microNutrients: { name: string; data: number[] }[];
-    symptomLogs: any[]; // We'll need to fetch these or pass them in
+    nutrients: { name: string; data: number[] }[];
+    symptomLogs: SymptomLog[];
 }
 
-export default function FoodMoodChart({ dates, microNutrients, symptomLogs }: FoodMoodProps) {
-    const [selectedNutrient, setSelectedNutrient] = useState<string>('Sugar');
-    const [selectedSymptom, setSelectedSymptom] = useState<string>('Fatigue');
+const FALLBACK_SYMPTOMS = ['Fatigue', 'Headache', 'Bloating', 'Anxiety', 'Brain Fog'];
+
+export default function FoodMoodChart({ dates, nutrients, symptomLogs }: FoodMoodProps) {
+    const nutrientOptions = useMemo(
+        () => nutrients.map((nutrient) => nutrient.name).sort(),
+        [nutrients]
+    );
+    const symptomOptions = useMemo(() => {
+        const names = Array.from(new Set(
+            symptomLogs
+                .map((log) => log.symptom_type_details?.name)
+                .filter((name): name is string => Boolean(name))
+        )).sort();
+
+        return names.length > 0 ? names : FALLBACK_SYMPTOMS;
+    }, [symptomLogs]);
+
+    const [selectedNutrient, setSelectedNutrient] = useState<string>('');
+    const [selectedSymptom, setSelectedSymptom] = useState<string>('');
+
+    useEffect(() => {
+        if (!nutrientOptions.length) {
+            setSelectedNutrient('');
+            return;
+        }
+
+        if (!selectedNutrient || !nutrientOptions.includes(selectedNutrient)) {
+            setSelectedNutrient(nutrientOptions.includes('Sugar') ? 'Sugar' : nutrientOptions[0]);
+        }
+    }, [nutrientOptions, selectedNutrient]);
+
+    useEffect(() => {
+        if (!symptomOptions.length) {
+            setSelectedSymptom('');
+            return;
+        }
+
+        if (!selectedSymptom || !symptomOptions.includes(selectedSymptom)) {
+            setSelectedSymptom(symptomOptions[0]);
+        }
+    }, [selectedSymptom, symptomOptions]);
 
     // Combine data for the chart
     const chartData = useMemo(() => {
-        const nutrientData = microNutrients?.find(n => n.name === selectedNutrient)?.data || [];
-        const logs = Array.isArray(symptomLogs) ? symptomLogs : [];
+        const nutrientData = nutrients.find((nutrient) => nutrient.name === selectedNutrient)?.data || [];
 
         return dates.map((date, index) => {
-            // Find symptom log for this date (simplified matching)
-            const log = logs.find(l => l.date && l.date.substring(0, 10) === date);
+            const matchingLogs = symptomLogs.filter((log) => {
+                if (!log.date || log.date.substring(0, 10) !== date) {
+                    return false;
+                }
+
+                if (!selectedSymptom) {
+                    return true;
+                }
+
+                return log.symptom_type_details?.name === selectedSymptom;
+            });
+            const averageSeverity = matchingLogs.length
+                ? matchingLogs.reduce((sum, log) => sum + log.severity, 0) / matchingLogs.length
+                : null;
 
             return {
-                date,
+                dateLabel: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
                 nutrientAmount: nutrientData[index] || 0,
-                symptomSeverity: log?.severity || 0, // 0 means no log, or maybe use null?
+                symptomSeverity: averageSeverity,
             };
         });
-    }, [dates, microNutrients, symptomLogs, selectedNutrient, selectedSymptom]);
-
-    const nutrientOptions = microNutrients.map(n => n.name).sort();
+    }, [dates, nutrients, selectedNutrient, selectedSymptom, symptomLogs]);
 
     return (
         <Card className="col-span-full shadow-sm hover:shadow-md transition-all duration-300 bg-white border border-gray-100">
@@ -52,19 +100,19 @@ export default function FoodMoodChart({ dates, microNutrients, symptomLogs }: Fo
                     <div className="space-y-1">
                         <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
                             <Brain className="w-6 h-6 text-indigo-500" />
-                            Food-Mood Correlation
+                            Food & Symptom Patterns
                             <TooltipProvider>
                                 <ShadTooltip>
                                     <TooltipTrigger>
                                         <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                        <p className="max-w-[200px]">Analyze potential links between your nutrient intake and reported symptoms.</p>
+                                        <p className="max-w-[220px]">Overlay same-day nutrient intake with symptom severity to spot possible patterns. This view is observational, not causal.</p>
                                     </TooltipContent>
                                 </ShadTooltip>
                             </TooltipProvider>
                         </CardTitle>
-                        <CardDescription className="text-sm font-medium text-gray-500">Analyze how specific nutrients impact your symptoms.</CardDescription>
+                        <CardDescription className="text-sm font-medium text-gray-500">Compare same-day nutrient intake with symptom severity.</CardDescription>
                     </div>
                     <div className="flex gap-2 items-center">
                         <Popover>
@@ -79,7 +127,7 @@ export default function FoodMoodChart({ dates, microNutrients, symptomLogs }: Fo
                                     Correlation Insight
                                 </div>
                                 <p className="text-sm text-gray-600">
-                                    Correlating <strong>{selectedNutrient}</strong> history with <strong>{selectedSymptom}</strong> logs. Look for patterns where spikes in intake precede symptoms.
+                                    Comparing same-day <strong>{selectedNutrient}</strong> intake with logged <strong>{selectedSymptom}</strong> severity. Use this as a pattern-spotting aid, not proof of causation.
                                 </p>
                             </PopoverContent>
                         </Popover>
@@ -88,8 +136,8 @@ export default function FoodMoodChart({ dates, microNutrients, symptomLogs }: Fo
                                 <SelectValue placeholder="Nutrient" />
                             </SelectTrigger>
                             <SelectContent>
-                                {nutrientOptions.map(n => (
-                                    <SelectItem key={n} value={n}>{n}</SelectItem>
+                                {nutrientOptions.map((nutrient) => (
+                                    <SelectItem key={nutrient} value={nutrient}>{nutrient}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -101,11 +149,9 @@ export default function FoodMoodChart({ dates, microNutrients, symptomLogs }: Fo
                                 <SelectValue placeholder="Symptom" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="Fatigue">Fatigue</SelectItem>
-                                <SelectItem value="Headache">Headache</SelectItem>
-                                <SelectItem value="Bloating">Bloating</SelectItem>
-                                <SelectItem value="Anxiety">Anxiety</SelectItem>
-                                <SelectItem value="Brain Fog">Brain Fog</SelectItem>
+                                {symptomOptions.map((symptom) => (
+                                    <SelectItem key={symptom} value={symptom}>{symptom}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>
@@ -123,7 +169,7 @@ export default function FoodMoodChart({ dates, microNutrients, symptomLogs }: Fo
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} stroke="#e5e7eb" />
                             <XAxis
-                                dataKey="date"
+                                dataKey="dateLabel"
                                 tick={{ fontSize: 11, fill: '#6b7280' }}
                                 axisLine={false}
                                 tickLine={false}
@@ -166,6 +212,7 @@ export default function FoodMoodChart({ dates, microNutrients, symptomLogs }: Fo
                                 name={selectedSymptom}
                                 stroke="#f97316"
                                 strokeWidth={3}
+                                connectNulls={false}
                                 dot={{ r: 4, fill: '#f97316', strokeWidth: 2, stroke: '#fff' }}
                                 activeDot={{ r: 6, strokeWidth: 0 }}
                             />

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   analyticsService,
+  type AnalyticsPeriod,
   type NutrientStats,
   type ComplianceStats,
   type MealDistribution,
@@ -31,7 +32,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import type { Patient } from '@/types';
-import { getNutrientTargets } from '@/utils/nutrition';
+import { formatMacroTargetSplitLabel, getMacroTargetSplit, getNutrientTargets } from '@/utils/nutrition';
 import {
   Tooltip as ShadTooltip,
   TooltipContent,
@@ -103,6 +104,42 @@ const formatAxisValue = (value: number): string => {
   return value.toFixed(0);
 };
 
+const getTooltipUnit = (label: string) => {
+  if (['Calories', 'Target', 'Intake', 'TDEE Target', 'Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Snack'].includes(label)) {
+    return ' kcal';
+  }
+  if (label === 'Weight') {
+    return ' kg';
+  }
+  if (['Sodium', 'Cholesterol', 'Iron', 'Calcium', 'Potassium'].includes(label)) {
+    return ' mg';
+  }
+  if (label === 'Vitamin D') {
+    return ' IU';
+  }
+  return ' g';
+};
+
+interface TrendDataPoint {
+  date: string;
+  Calories: number;
+  Target: number;
+  Protein: number;
+  Carbohydrates: number;
+  Fat: number;
+  Fiber: number;
+  Sugar: number;
+  Sodium: number;
+  Cholesterol: number;
+  'Saturated Fat': number;
+  'Unsaturated Fat': number;
+  'Trans-fat': number;
+  Iron: number;
+  Calcium: number;
+  'Vitamin D': number;
+  Potassium: number;
+}
+
 
 // Custom Tooltip
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -123,14 +160,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
               ? p.payload[originalName]
               : p.value;
 
+            if (displayValue === null || displayValue === undefined) {
+              return null;
+            }
+
             return (
               <div key={p.name} className="flex items-center gap-2 text-sm">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color || p.payload?.fill || p.payload?.color }} />
                 <span className="text-gray-600">{originalName}:</span>
                 <span className="font-semibold text-gray-900">
                   {Number(displayValue).toFixed(1)}
-                  {['Calories', 'Target'].includes(originalName) ? ' kcal' :
-                    ['Sodium', 'Cholesterol'].includes(originalName) ? ' mg' : 'g'}
+                  {getTooltipUnit(originalName)}
                   {isPct && <span className="text-xs text-gray-400 ml-1">({Number(p.value).toFixed(0)}%)</span>}
                 </span>
               </div>
@@ -146,7 +186,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function AnalyticsPage() {
   const { profile } = useAuth();
   const patient = profile as Patient;
-  const [period, setPeriod] = useState<'weekly' | 'monthly' | '60days' | 'all'>('weekly');
+  const [period, setPeriod] = useState<AnalyticsPeriod>('weekly');
   const [stats, setStats] = useState<NutrientStats | null>(null);
   const [compliance, setCompliance] = useState<ComplianceStats | null>(null);
   const [distribution, setDistribution] = useState<MealDistribution | null>(null);
@@ -212,34 +252,49 @@ export default function AnalyticsPage() {
     const { value } = data;
     setHiddenNutrients(prev =>
       prev.includes(value)
-        ? prev.filter(n => n !== value)
-        : [...prev, value]
+      ? prev.filter(n => n !== value)
+      : [...prev, value]
     );
   };
 
-  // Derived days for charts (not table)
-  const days = useMemo(() => {
+  const requestedDays = useMemo(() => {
     switch (period) {
-      case 'weekly': return 7;
-      case 'monthly': return 30;
-      case '60days': return 60;
-      case 'all': return 90; // Just an approximation for the label
-      default: return 7;
+      case 'weekly':
+        return 7;
+      case 'monthly':
+        return 30;
+      case '60days':
+        return 60;
+      case 'all':
+        return 0;
+      default:
+        return 7;
     }
   }, [period]);
+  const analyticsDays = useMemo(
+    () => stats?.dates.length || requestedDays || 1,
+    [requestedDays, stats]
+  );
+
+  const fetchSymptomHistory = async (): Promise<void> => {
+    const symptomData = await vitalSignsService.getRecentSymptoms();
+    setSymptomHistory(symptomData);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [statsData, complianceData, distributionData, historyData, advData, fullHistoryData, weightHistoryData, symptomData] = await Promise.all([
-          analyticsService.getPatientAnalytics(period),
-          analyticsService.getComplianceStats(),
-          analyticsService.getMealDistribution(days),
-          analyticsService.getDailyHistory(days),
+        const statsData = await analyticsService.getPatientAnalytics(period);
+        const chartSpanDays = statsData.dates.length || requestedDays || 1;
+
+        const [complianceData, distributionData, historyData, advData, fullHistoryData, weightHistoryData, symptomData] = await Promise.all([
+          analyticsService.getComplianceStats(chartSpanDays),
+          analyticsService.getMealDistribution(chartSpanDays),
+          analyticsService.getDailyHistory(chartSpanDays),
           analyticsService.getAdvancedStats(),
           analyticsService.getDailyHistory(180), // Fetch strict 180 days for the table regardless of chart selection
-          analyticsService.getWeightHistory(days < 30 ? 30 : days), // Always fetch at least 30 days for weight
+          analyticsService.getWeightHistory(Math.max(chartSpanDays, 30)),
           vitalSignsService.getRecentSymptoms()
         ]);
 
@@ -259,7 +314,7 @@ export default function AnalyticsPage() {
     };
 
     fetchData();
-  }, [period, days]);
+  }, [period, requestedDays]);
 
   // --- Search & Pagination Logic ---
   const filteredHistory = useMemo(() => {
@@ -452,20 +507,22 @@ export default function AnalyticsPage() {
 
   // Centralized targets
   const t = getNutrientTargets(patient, advancedStats?.tdee);
+  const targetMacroSplit = useMemo(() => getMacroTargetSplit(t), [t]);
+  const targetMacroLabel = useMemo(() => formatMacroTargetSplitLabel(t), [t]);
 
-  const avgProtein = useMemo(() => (stats?.macro_nutrients.find(n => n.name === 'Protein')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
-  const avgFiber = useMemo(() => (stats?.macro_nutrients.find(n => n.name === 'Fiber')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
-  const avgCarbs = useMemo(() => (stats?.macro_nutrients.find(n => n.name === 'Carbohydrates')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
-  const avgSugar = useMemo(() => (stats?.limiting_nutrients.find(n => n.name === 'Sugar')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
-  const avgSodium = useMemo(() => (stats?.micro_nutrients.find(n => n.name === 'Sodium')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
-  const avgChol = useMemo(() => (stats?.micro_nutrients.find(n => n.name === 'Cholesterol')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
+  const avgProtein = useMemo(() => (stats?.macro_nutrients?.find(n => n.name === 'Protein')?.data.reduce((a, b) => a + b, 0) || 0) / analyticsDays, [analyticsDays, stats]);
+  const avgFiber = useMemo(() => (stats?.macro_nutrients?.find(n => n.name === 'Fiber')?.data.reduce((a, b) => a + b, 0) || 0) / analyticsDays, [analyticsDays, stats]);
+  const avgCarbs = useMemo(() => (stats?.macro_nutrients?.find(n => n.name === 'Carbohydrates')?.data.reduce((a, b) => a + b, 0) || 0) / analyticsDays, [analyticsDays, stats]);
+  const avgSugar = useMemo(() => (stats?.limiting_nutrients?.find(n => n.name === 'Sugar')?.data.reduce((a, b) => a + b, 0) || 0) / analyticsDays, [analyticsDays, stats]);
+  const avgSodium = useMemo(() => (stats?.micro_nutrients?.find(n => n.name === 'Sodium')?.data.reduce((a, b) => a + b, 0) || 0) / analyticsDays, [analyticsDays, stats]);
+  const avgChol = useMemo(() => (stats?.micro_nutrients?.find(n => n.name === 'Cholesterol')?.data.reduce((a, b) => a + b, 0) || 0) / analyticsDays, [analyticsDays, stats]);
 
   // New Micros (Removed manual averages as they are handled dynamically in the mapping)
 
 
-  const avgSatFat = useMemo(() => (stats?.limiting_nutrients.find(n => n.name === 'Saturated Fat')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
-  const avgFat = useMemo(() => (stats?.macro_nutrients.find(n => n.name === 'Fat')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
-  const avgTransFat = useMemo(() => (stats?.limiting_nutrients.find(n => n.name === 'Trans-fat')?.data.reduce((a, b) => a + b, 0) || 0) / days, [stats, days]);
+  const avgSatFat = useMemo(() => (stats?.limiting_nutrients?.find(n => n.name === 'Saturated Fat')?.data.reduce((a, b) => a + b, 0) || 0) / analyticsDays, [analyticsDays, stats]);
+  const avgFat = useMemo(() => (stats?.macro_nutrients?.find(n => n.name === 'Fat')?.data.reduce((a, b) => a + b, 0) || 0) / analyticsDays, [analyticsDays, stats]);
+  const avgTransFat = useMemo(() => (stats?.limiting_nutrients?.find(n => n.name === 'Trans-fat')?.data.reduce((a, b) => a + b, 0) || 0) / analyticsDays, [analyticsDays, stats]);
 
 
 
@@ -475,25 +532,36 @@ export default function AnalyticsPage() {
 
   const carbQualityScore = avgSugar > 0 ? (avgFiber / avgSugar) : 0;
 
-  const trendData = [...history].reverse().map(h => ({
-    date: new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    Calories: h.total_calories || 0,
-    Target: t.calories,
-    Protein: h.total_protein || 0,
-    Carbohydrates: h.total_carbohydrates || 0,
-    Fat: h.total_fat || 0,
-    Fiber: h.total_fiber || 0,
-    Sugar: h.total_sugar || 0,
-    Sodium: h.total_sodium || 0,
-    Cholesterol: h.total_cholesterol || 0,
-    'Saturated Fat': h.total_saturated_fat || 0,
-    'Unsaturated Fat': h.total_unsaturated_fat || 0,
-    'Trans-fat': h.total_trans_fat || 0,
-    'Iron': h.total_iron || 0,
-    'Calcium': h.total_calcium || 0,
-    'Vitamin D': h.total_vitamin_d || 0,
-    'Potassium': h.total_potassium || 0
-  }));
+  const trendData = useMemo<TrendDataPoint[]>(() => {
+    if (!stats) {
+      return [];
+    }
+
+    return stats.dates.map((date, index) => {
+      const getSeriesValue = (name: string, series: { name: string; data: number[] }[]) =>
+        series.find((nutrient) => nutrient.name === name)?.data[index] || 0;
+
+      return {
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        Calories: stats.calories[index] || 0,
+        Target: t.calories,
+        Protein: getSeriesValue('Protein', stats.macro_nutrients),
+        Carbohydrates: getSeriesValue('Carbohydrates', stats.macro_nutrients),
+        Fat: getSeriesValue('Fat', stats.macro_nutrients),
+        Fiber: getSeriesValue('Fiber', stats.macro_nutrients),
+        Sugar: getSeriesValue('Sugar', stats.limiting_nutrients),
+        Sodium: getSeriesValue('Sodium', stats.micro_nutrients),
+        Cholesterol: getSeriesValue('Cholesterol', stats.micro_nutrients),
+        'Saturated Fat': getSeriesValue('Saturated Fat', stats.limiting_nutrients),
+        'Unsaturated Fat': getSeriesValue('Unsaturated Fat', stats.limiting_nutrients),
+        'Trans-fat': getSeriesValue('Trans-fat', stats.limiting_nutrients),
+        Iron: getSeriesValue('Iron', stats.micro_nutrients),
+        Calcium: getSeriesValue('Calcium', stats.micro_nutrients),
+        'Vitamin D': getSeriesValue('Vitamin D', stats.micro_nutrients),
+        Potassium: getSeriesValue('Potassium', stats.micro_nutrients),
+      };
+    });
+  }, [stats, t.calories]);
 
   const hasData = trendData.some(d => d.Calories > 0);
 
@@ -515,9 +583,9 @@ export default function AnalyticsPage() {
   }));
 
   const fatData = useMemo(() => [
-    { name: 'Saturated', value: stats?.limiting_nutrients.find(n => n.name === 'Saturated Fat')?.data.reduce((a, b) => a + b, 0) || 0 },
-    { name: 'Unsaturated', value: stats?.limiting_nutrients.find(n => n.name === 'Unsaturated Fat')?.data.reduce((a, b) => a + b, 0) || 0 },
-    { name: 'Trans-fat', value: stats?.limiting_nutrients.find(n => n.name === 'Trans-fat')?.data.reduce((a, b) => a + b, 0) || 0 },
+    { name: 'Saturated', value: stats?.limiting_nutrients?.find(n => n.name === 'Saturated Fat')?.data.reduce((a, b) => a + b, 0) || 0 },
+    { name: 'Unsaturated', value: stats?.limiting_nutrients?.find(n => n.name === 'Unsaturated Fat')?.data.reduce((a, b) => a + b, 0) || 0 },
+    { name: 'Trans-fat', value: stats?.limiting_nutrients?.find(n => n.name === 'Trans-fat')?.data.reduce((a, b) => a + b, 0) || 0 },
   ], [stats]);
   const totalFat = fatData.reduce((a, b) => a + b.value, 0);
 
@@ -539,20 +607,51 @@ export default function AnalyticsPage() {
   ], [avgSodium, avgChol, avgSatFat, avgSugar, avgTransFat, t]);
 
   const energyInsight = useMemo(() => {
-    const avgCal = (stats?.calories.reduce((a, b) => a + b, 0) || 0) / days;
+    const avgCal = (stats?.calories.reduce((a, b) => a + b, 0) || 0) / analyticsDays;
     const targetCalories = t.calories;
     const diff = targetCalories - avgCal;
     if (diff > 300) return { type: 'warning' as const, text: `You're averaging ${Math.round(diff)} kcal below your energy needs. Consider adding nutrient-dense snacks like nuts or Greek yogurt.` };
     if (diff < -300) return { type: 'warning' as const, text: `You're ${Math.round(Math.abs(diff))} kcal over your target. Try portion control on carbohydrates to reduce intake.` };
     return { type: 'good' as const, text: `Excellent! Your calorie intake is well-balanced with your daily energy expenditure.` };
-  }, [stats, advancedStats, days, t]);
+  }, [analyticsDays, stats, t]);
 
   const macroInsight = useMemo(() => {
-    const proteinPct = macroRatioData[0]?.value || 0;
-    if (proteinPct < 25) return { type: 'warning' as const, text: `Protein is only ${proteinPct}% of your calories (target: 30%). Add lean meats, eggs, or legumes to boost muscle recovery.` };
-    if (proteinPct > 35) return { type: 'info' as const, text: `High protein intake detected (${proteinPct}%). Great for muscle building, but ensure adequate hydration.` };
-    return { type: 'good' as const, text: `Your macronutrient balance is on point! Protein, carbohydrates, and fat are in a healthy ratio.` };
-  }, [macroRatioData]);
+    const actual = {
+      Protein: macroRatioData.find((item) => item.name === 'Protein')?.value || 0,
+      Carbohydrates: macroRatioData.find((item) => item.name === 'Carbohydrates')?.value || 0,
+      Fat: macroRatioData.find((item) => item.name === 'Fat')?.value || 0,
+    };
+    const targets = {
+      Protein: targetMacroSplit.proteinPct,
+      Carbohydrates: targetMacroSplit.carbsPct,
+      Fat: targetMacroSplit.fatPct,
+    };
+
+    const largestDeviation = Object.entries(actual)
+      .map(([name, value]) => ({
+        name,
+        actual: value,
+        target: targets[name as keyof typeof targets],
+        diff: value - targets[name as keyof typeof targets],
+      }))
+      .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))[0];
+
+    if (!largestDeviation || Math.abs(largestDeviation.diff) <= 5) {
+      return { type: 'good' as const, text: `Your current macro split is close to your personal target (${targetMacroLabel}).` };
+    }
+
+    if (largestDeviation.diff > 0) {
+      return {
+        type: 'info' as const,
+        text: `${largestDeviation.name} is running above your personal target (${largestDeviation.actual}% vs ${largestDeviation.target}%). Keep portion sizes in check if this is intentional.`,
+      };
+    }
+
+    return {
+      type: 'warning' as const,
+      text: `${largestDeviation.name} is below your personal target (${largestDeviation.actual}% vs ${largestDeviation.target}%). Rebalancing meals could improve adherence.`,
+    };
+  }, [macroRatioData, targetMacroLabel, targetMacroSplit]);
 
   const fatInsight = useMemo(() => {
     const unsatPct = totalFat > 0 ? (fatData[1].value / totalFat) * 100 : 0;
@@ -581,20 +680,25 @@ export default function AnalyticsPage() {
     return weightHistory.dates.map((date, i) => ({
       date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       weight: weightHistory.weights[i],
-      calories: weightHistory.calories[i]
+      calories: weightHistory.calories[i],
+      measured: weightHistory.measured?.[i] ?? weightHistory.weights[i] !== null,
     }));
   }, [weightHistory]);
+  const recordedWeightEntries = useMemo(
+    () => weightChartData.filter((entry) => entry.measured && entry.weight !== null && entry.weight !== undefined),
+    [weightChartData]
+  );
 
   const weightTrendInsight = useMemo(() => {
-    if (!weightHistory || !weightHistory.weights || weightHistory.weights.length < 2) return { type: 'info' as const, text: 'Not enough data to determine weight trend.' };
-    const start = weightHistory.weights[0];
-    const end = weightHistory.weights[weightHistory.weights.length - 1];
+    if (recordedWeightEntries.length < 2) return { type: 'info' as const, text: 'Not enough recorded weigh-ins to determine a reliable weight trend.' };
+    const start = recordedWeightEntries[0].weight as number;
+    const end = recordedWeightEntries[recordedWeightEntries.length - 1].weight as number;
     const diff = end - start;
 
-    if (diff < -0.5) return { type: 'good' as const, text: `Great progress! You've lost ${Math.abs(diff).toFixed(1)}kg this period.` };
-    if (diff > 0.5) return { type: 'warning' as const, text: `Weight has increased by ${diff.toFixed(1)}kg. Check your calorie balance.` };
-    return { type: 'info' as const, text: `Your weight is stable (${Math.abs(diff).toFixed(1)}kg change). Consistency is key!` };
-  }, [weightHistory]);
+    if (diff < -0.5) return { type: 'good' as const, text: `Across your recorded weigh-ins, weight is down ${Math.abs(diff).toFixed(1)}kg this period.` };
+    if (diff > 0.5) return { type: 'warning' as const, text: `Across your recorded weigh-ins, weight is up ${diff.toFixed(1)}kg this period. Review calorie balance and meal consistency.` };
+    return { type: 'info' as const, text: `Your recorded weigh-ins are broadly stable (${Math.abs(diff).toFixed(1)}kg change).` };
+  }, [recordedWeightEntries]);
 
   if (loading && !stats) {
     return (
@@ -618,7 +722,7 @@ export default function AnalyticsPage() {
             </h1>
             <p className="text-muted-foreground mt-1">Your personalized health analytics powered by data.</p>
           </div>
-          <Select value={period} onValueChange={(v: 'weekly' | 'monthly') => setPeriod(v)}>
+          <Select value={period} onValueChange={(value) => setPeriod(value as AnalyticsPeriod)}>
             <SelectTrigger className="w-[180px] bg-white shadow-sm">
               <SelectValue placeholder="Select period" />
             </SelectTrigger>
@@ -639,7 +743,7 @@ export default function AnalyticsPage() {
             compliance={compliance}
             advancedStats={advancedStats}
             weightHistory={weightHistory}
-            days={days}
+            days={analyticsDays}
           />
         </div>
 
@@ -692,9 +796,9 @@ export default function AnalyticsPage() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                       <XAxis dataKey="date" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} interval={0} tickFormatter={(val, index) => {
-                        if (days <= 7) return val;
-                        if (days <= 30) return index % 3 === 0 ? val : '';
-                        if (days <= 60) return index % 6 === 0 ? val : '';
+                        if (analyticsDays <= 7) return val;
+                        if (analyticsDays <= 30) return index % 3 === 0 ? val : '';
+                        if (analyticsDays <= 60) return index % 6 === 0 ? val : '';
                         return index % 14 === 0 ? val : '';
                       }} />
                       <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
@@ -788,7 +892,7 @@ export default function AnalyticsPage() {
             <HydrationWidget />
           </div>
           <div className="h-[380px]">
-            <SymptomTracker />
+            <SymptomTracker onSymptomLogged={fetchSymptomHistory} />
           </div>
           <div className="h-[380px]">
             <DeficiencyAlert
@@ -810,7 +914,11 @@ export default function AnalyticsPage() {
         <section className="mb-8">
           <FoodMoodChart
             dates={stats?.dates || []}
-            microNutrients={[...(stats?.macro_nutrients || []), ...(stats?.micro_nutrients || [])]}
+            nutrients={[
+              ...(stats?.macro_nutrients || []),
+              ...(stats?.micro_nutrients || []),
+              ...(stats?.limiting_nutrients || []),
+            ]}
             symptomLogs={symptomHistory}
           />
         </section>
@@ -823,29 +931,29 @@ export default function AnalyticsPage() {
                 <div className="space-y-1">
                   <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
                     <Scale className="w-5 h-5 text-teal-500" />
-                    Weight Progression vs Intake
+                    Recorded Weight vs Intake
                     <TooltipProvider>
                       <ShadTooltip>
                         <TooltipTrigger>
                           <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="max-w-[200px]">Correlates your daily calorie intake with weight changes over time.</p>
+                          <p className="max-w-[220px]">Shows logged weigh-ins alongside daily calorie intake. Days without a weight entry are left blank rather than estimated.</p>
                         </TooltipContent>
                       </ShadTooltip>
                     </TooltipProvider>
                   </CardTitle>
-                  <CardDescription>Track how your calorie intake correlates with weight changes.</CardDescription>
+                  <CardDescription>Only recorded weigh-ins are plotted against daily calories.</CardDescription>
                 </div>
                 {/* Weight Insight */}
                 <div className="flex items-center gap-4 text-sm">
-                  {weightChartData.length > 0 && weightChartData.some(d => d.weight) && (
+                  {recordedWeightEntries.length > 0 && (
                     <>
                       <div className="flex items-center gap-1.5 px-3 py-1 bg-teal-50 text-teal-700 rounded-full font-medium">
-                        Starting: <span className="font-bold">{weightChartData.find(d => d.weight)?.weight} kg</span>
+                        First Log: <span className="font-bold">{recordedWeightEntries[0].weight} kg</span>
                       </div>
                       <div className="flex items-center gap-1.5 px-3 py-1 bg-violet-50 text-violet-700 rounded-full font-medium">
-                        Current: <span className="font-bold">{[...weightChartData].reverse().find(d => d.weight)?.weight} kg</span>
+                        Latest Log: <span className="font-bold">{recordedWeightEntries[recordedWeightEntries.length - 1].weight} kg</span>
                       </div>
                     </>
                   )}
@@ -867,7 +975,7 @@ export default function AnalyticsPage() {
               </div>
             </CardHeader>
             <CardContent className="h-[400px] mt-4 flex items-center justify-center p-4">
-              {weightChartData.length > 0 && weightChartData.some(d => d.weight !== null && d.weight !== undefined && d.weight > 0) ? (
+              {recordedWeightEntries.length > 0 ? (
                 <ResponsiveContainer width="100%" height={400}>
                   <ComposedChart data={weightChartData} margin={{ top: 20, right: 30, left: 10, bottom: 10 }}>
                     <defs>
@@ -894,8 +1002,14 @@ export default function AnalyticsPage() {
                       tick={{ fontSize: 11, fill: '#64748b' }}
                       tickLine={false}
                       axisLine={false}
-                      minTickGap={40}
+                      interval={0}
                       dy={10}
+                      tickFormatter={(value, index) => {
+                        if (analyticsDays <= 7) return value;
+                        if (analyticsDays <= 30) return index % 3 === 0 ? value : '';
+                        if (analyticsDays <= 60) return index % 6 === 0 ? value : '';
+                        return index % 14 === 0 ? value : '';
+                      }}
                     />
                     <YAxis
                       yAxisId="left"
@@ -928,22 +1042,21 @@ export default function AnalyticsPage() {
                       radius={50}
                       maxBarSize={40}
                     />
-                    <Area
+                    <Line
                       yAxisId="left"
                       type="monotone"
                       dataKey="weight"
-                      name="Weight"
-                      stroke="url(#gradWeight)"
+                      name="Recorded Weight"
+                      stroke={COLORS.weight.start}
                       strokeWidth={3}
-                      fill="url(#gradWeight)"
-                      fillOpacity={0.15}
-                      dot={false}
+                      connectNulls
+                      dot={{ r: 4, fill: COLORS.weight.start, stroke: '#fff', strokeWidth: 2 }}
                       activeDot={{ r: 6, fill: COLORS.weight.start, stroke: '#fff', strokeWidth: 2 }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-400">No weight data available</div>
+                <div className="flex items-center justify-center h-full text-gray-400">No recorded weight logs available</div>
               )}
             </CardContent>
           </Card>
@@ -1054,9 +1167,9 @@ export default function AnalyticsPage() {
                         dy={10}
                         tick={{ fill: '#64748b' }}
                         tickFormatter={(val, index) => {
-                          if (days <= 7) return val;
-                          if (days <= 30) return index % 3 === 0 ? val : '';
-                          if (days <= 60) return index % 6 === 0 ? val : '';
+                          if (analyticsDays <= 7) return val;
+                          if (analyticsDays <= 30) return index % 3 === 0 ? val : '';
+                          if (analyticsDays <= 60) return index % 6 === 0 ? val : '';
                           return index % 14 === 0 ? val : '';
                         }}
                       />
@@ -1260,9 +1373,9 @@ export default function AnalyticsPage() {
                         dy={10}
                         tick={{ fill: '#64748b' }}
                         tickFormatter={(val, index) => {
-                          if (days <= 7) return val;
-                          if (days <= 30) return index % 3 === 0 ? val : '';
-                          if (days <= 60) return index % 6 === 0 ? val : '';
+                          if (analyticsDays <= 7) return val;
+                          if (analyticsDays <= 30) return index % 3 === 0 ? val : '';
+                          if (analyticsDays <= 60) return index % 6 === 0 ? val : '';
                           return index % 14 === 0 ? val : '';
                         }}
                       />
@@ -1391,12 +1504,12 @@ export default function AnalyticsPage() {
                               <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p className="max-w-[200px]">Your average macronutrient split compared to the recommended 30% Protein, 40% Carbohydrates, 30% Fat target.</p>
+                              <p className="max-w-[220px]">Shows how your average calories are split across protein, carbohydrates, and fat. Personal target: {targetMacroLabel}.</p>
                             </TooltipContent>
                           </ShadTooltip>
                         </TooltipProvider>
                       </CardTitle>
-                      <CardDescription>Target: 30P / 40C / 30F</CardDescription>
+                      <CardDescription>Current average split. Personal target: {targetMacroLabel}</CardDescription>
                     </div>
                     <Popover>
                       <PopoverTrigger asChild>
@@ -1409,7 +1522,7 @@ export default function AnalyticsPage() {
                           <Info className="w-4 h-4 text-blue-600" />
                           Composition Insight
                         </div>
-                        <p className="text-sm text-gray-600">This chart compares your actual macronutrient ratio against the recommended 30/40/30 split.</p>
+                        <p className="text-sm text-gray-600">This chart summarizes your current average macro split. Use your personal target ({targetMacroLabel}) as the reference point.</p>
                       </PopoverContent>
                     </Popover>
                   </div>
@@ -1778,9 +1891,9 @@ export default function AnalyticsPage() {
                       dy={10}
                       tick={{ fill: '#64748b' }}
                       tickFormatter={(val, index) => {
-                        if (days <= 7) return val;
-                        if (days <= 30) return index % 3 === 0 ? val : '';
-                        if (days <= 60) return index % 6 === 0 ? val : '';
+                        if (analyticsDays <= 7) return val;
+                        if (analyticsDays <= 30) return index % 3 === 0 ? val : '';
+                        if (analyticsDays <= 60) return index % 6 === 0 ? val : '';
                         return index % 14 === 0 ? val : '';
                       }}
                     />
@@ -1994,7 +2107,7 @@ export default function AnalyticsPage() {
           <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
             <Utensils className="w-6 h-6 text-gray-600" /> Average Daily Intake
             <span className="text-sm font-normal text-gray-500 ml-2">
-              (Over last {days} days)
+              {period === 'all' ? '(Across all recorded days)' : `(Over last ${analyticsDays} days)`}
             </span>
           </h2>
           <Card className="shadow-none border-none">
@@ -2047,7 +2160,7 @@ export default function AnalyticsPage() {
                     else if (n.name === 'Cholesterol') { defaultLimit = t.cholesterol; defaultUnit = 'mg'; }
                   }
 
-                  const avg = (n.data.reduce((a: number, b: number) => a + b, 0) || 0) / (days || 1);
+                  const avg = (n.data.reduce((a: number, b: number) => a + b, 0) || 0) / analyticsDays;
                   const limit = defaultLimit || 1; // avoid divide by zero
                   const percentage = Math.min((avg / limit) * 100, 100);
 

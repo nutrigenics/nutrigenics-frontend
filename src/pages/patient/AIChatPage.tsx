@@ -4,7 +4,8 @@ import logo from '@/assets/logo.svg';
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Image as ImageIcon, Sparkles, Loader2, X, StopCircle, Mic, Paperclip, ChefHat, Bot } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Send, Image as ImageIcon, Sparkles, Loader2, X, StopCircle, Mic, Paperclip, ChefHat, Bot, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
@@ -51,6 +52,33 @@ interface AssistantComponent {
   };
 }
 
+interface ChatBlock {
+  type: string;
+  props: {
+    markdown?: string;
+    data?: unknown;
+    title?: string;
+    type?: string;
+    chart_type?: string;
+    targets?: Record<string, number>;
+    nutrients?: unknown;
+    recipes?: RecipeDataShape[];
+    label?: string;
+    value?: string | number;
+    description?: string;
+    images?: Array<{
+      url?: string;
+      alt?: string;
+      caption?: string;
+    }>;
+    items?: Array<{
+      label?: string;
+      value?: string | number;
+    }>;
+    [key: string]: unknown;
+  };
+}
+
 interface MessageMetadata {
   image?: string;
   request_id?: string;
@@ -58,6 +86,7 @@ interface MessageMetadata {
   recipes_found?: number;
   recipes?: RecipeDataShape[];
   visualization?: unknown;
+  blocks?: ChatBlock[];
   components?: AssistantComponent[];
   pending_components?: boolean;
   [key: string]: unknown;
@@ -73,6 +102,7 @@ interface ChatSocketMessage {
   recipes_found?: number;
   recipes?: RecipeDataShape[];
   visualization?: unknown;
+  blocks?: ChatBlock[];
   components?: AssistantComponent[];
   pending_components?: boolean;
 }
@@ -86,6 +116,7 @@ interface ChatHttpResponse {
   success?: boolean;
   recipes_found?: number;
   recipes?: RecipeDataShape[];
+  blocks?: ChatBlock[];
   components?: AssistantComponent[];
   pending_components?: boolean;
 }
@@ -116,13 +147,41 @@ const toNumber = (value: unknown): number => {
   return 0;
 };
 
+const resolveRecipeImageUrl = (recipeData: RecipeDataShape): string => {
+  const recipeImage = recipeData.recipe_image;
+  if (typeof recipeImage === 'string' && recipeImage.length > 0) {
+    if (recipeImage.startsWith('http')) {
+      return recipeImage;
+    }
+    if (recipeImage.startsWith('/')) {
+      return `${API_BASE_URL}${recipeImage}`;
+    }
+    return `${API_BASE_URL}/media/${recipeImage}`;
+  }
+
+  return `/media/recipe_images/${(recipeData.recipe_name || '').replace(/ /g, '_')}_${String(recipeData.recipe_id || '').padStart(7, '0')}.png`;
+};
+
+const resolveMediaUrl = (value: string | undefined): string => {
+  if (!value) {
+    return '/illustrations/recipe-placeholder.png';
+  }
+  if (value.startsWith('http')) {
+    return value;
+  }
+  if (value.startsWith('/')) {
+    return `${API_BASE_URL}${value}`;
+  }
+  return `${API_BASE_URL}/media/${value}`;
+};
+
 const mapRecipeDataToRecipe = (recipeData: RecipeDataShape): Recipe => ({
   id: toNumber(recipeData.recipe_id),
   name: recipeData.recipe_name || 'Recipe',
-  image: recipeData.recipe_image || `/media/recipe_images/${(recipeData.recipe_name || '').replace(/ /g, '_')}_${String(recipeData.recipe_id || '').padStart(7, '0')}.png`,
+  image: resolveRecipeImageUrl(recipeData),
   time: recipeData.recipe_time_minutes ? `${recipeData.recipe_time_minutes} min` : '15 min',
   calories: toNumber(recipeData.nutrients?.Calories || recipeData.nutrients?.Energy),
-  recipe_image: recipeData.recipe_image || `/media/recipe_images/${(recipeData.recipe_name || '').replace(/ /g, '_')}_${String(recipeData.recipe_id || '').padStart(7, '0')}.png`,
+  recipe_image: recipeData.recipe_image || resolveRecipeImageUrl(recipeData),
   recipe_name: recipeData.recipe_name || 'Recipe',
   recipe_time_minutes: toNumber(recipeData.recipe_time_minutes),
   ingredients: Array.isArray(recipeData.ingredients)
@@ -182,6 +241,136 @@ const buildFallbackRecipeComponents = (
   ];
 };
 
+const buildNutritionFactItems = (recipeData: RecipeDataShape | undefined): Array<{ label: string; value: string }> => {
+  if (!recipeData || !recipeData.nutrients) {
+    return [];
+  }
+
+  const orderedKeys = ['Calories', 'Energy', 'Protein', 'Carbohydrates', 'Fat', 'Fiber', 'Sugar', 'Sodium'];
+  const units: Record<string, string> = {
+    Calories: 'kcal',
+    Energy: 'kcal',
+    Protein: 'g',
+    Carbohydrates: 'g',
+    Fat: 'g',
+    Fiber: 'g',
+    Sugar: 'g',
+    Sodium: 'mg',
+  };
+
+  return orderedKeys
+    .filter((key) => recipeData.nutrients && recipeData.nutrients[key] != null)
+    .slice(0, 6)
+    .map((key) => {
+      const value = recipeData.nutrients?.[key];
+      const displayValue = typeof value === 'number' ? value.toFixed(1).replace(/\.0$/, '') : String(value);
+      return {
+        label: key === 'Energy' ? 'Calories' : key,
+        value: `${displayValue} ${units[key] || ''}`.trim(),
+      };
+    });
+};
+
+const buildFallbackChatBlocks = (
+  message: string,
+  recipes: RecipeDataShape[] | undefined,
+  recipesFound: number | undefined
+): ChatBlock[] => {
+  const blocks: ChatBlock[] = [];
+
+  if (message.trim()) {
+    blocks.push({
+      type: 'text',
+      props: {
+        markdown: message,
+      },
+    });
+  }
+
+  if (!Array.isArray(recipes) || recipes.length === 0) {
+    return blocks;
+  }
+
+  blocks.push({
+    type: 'stat_card',
+    props: {
+      label: 'Recipes Found',
+      value: recipesFound ?? recipes.length,
+    },
+  });
+
+  const images = recipes
+    .filter((recipe) => !!recipe.recipe_image)
+    .slice(0, 4)
+    .map((recipe) => ({
+      url: resolveRecipeImageUrl(recipe),
+      alt: recipe.recipe_name || 'Recipe image',
+      caption: recipe.recipe_name || 'Recipe',
+    }));
+
+  if (images.length > 0) {
+    blocks.push({
+      type: 'image_strip',
+      props: {
+        title: 'Recipe visuals',
+        images,
+      },
+    });
+  }
+
+  const nutritionItems = buildNutritionFactItems(recipes[0]);
+  if (nutritionItems.length > 0) {
+    blocks.push({
+      type: 'nutrition_facts',
+      props: {
+        title: `Nutrition snapshot for ${recipes[0].recipe_name || 'top match'}`,
+        items: nutritionItems,
+      },
+    });
+  }
+
+  blocks.push({
+    type: 'recipe_carousel',
+    props: {
+      recipes,
+    },
+  });
+
+  return blocks;
+};
+
+const buildLegacyBlocks = (
+  content: string,
+  blocks: ChatBlock[] | undefined,
+  components: AssistantComponent[] | undefined,
+  recipes: RecipeDataShape[] | undefined,
+  recipesFound: number | undefined
+): ChatBlock[] => {
+  if (Array.isArray(blocks) && blocks.length > 0) {
+    return blocks;
+  }
+
+  const normalizedBlocks: ChatBlock[] = [];
+  if (content.trim()) {
+    normalizedBlocks.push({
+      type: 'text',
+      props: {
+        markdown: content,
+      },
+    });
+  }
+
+  if (Array.isArray(components) && components.length > 0) {
+    normalizedBlocks.push(...components.map((component) => ({
+      type: component.type,
+      props: component.props,
+    })));
+    return normalizedBlocks;
+  }
+
+  return buildFallbackChatBlocks(content, recipes, recipesFound);
+};
+
 
 
 // WebSocket URL from Environment
@@ -189,6 +378,7 @@ const wsEnvBase = import.meta.env.VITE_WEBSOCKET_URL || import.meta.env.VITE_WS_
 const SOCKET_URL = wsEnvBase
   ? (wsEnvBase.endsWith('/ws/chat/') ? wsEnvBase : `${wsEnvBase.replace(/\/$/, '')}/ws/chat/`)
   : 'ws://localhost:8000/ws/chat/';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export default function AIChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -201,10 +391,15 @@ export default function AIChatPage() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [showRecipeDialog, setShowRecipeDialog] = useState(false);
   const [useHttpFallback, setUseHttpFallback] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const sessionIdRef = useRef<string>('');
@@ -261,6 +456,25 @@ export default function AIChatPage() {
     setTranscript(e.target.value);
   };
 
+  const stopCameraStream = () => {
+    const stream = cameraStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const closeCameraDialog = () => {
+    stopCameraStream();
+    setIsCameraOpen(false);
+    setIsCameraLoading(false);
+    setCameraError(null);
+  };
+
   // Initialize Session ID
   useEffect(() => {
     if (!sessionIdRef.current) {
@@ -274,6 +488,25 @@ export default function AIChatPage() {
         localStorage.setItem('chat_session_id', newId);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    if (!isCameraOpen || !cameraStreamRef.current || !videoRef.current) {
+      return;
+    }
+
+    const videoElement = videoRef.current;
+    videoElement.srcObject = cameraStreamRef.current;
+    void videoElement.play().catch((error) => {
+      console.error("Camera preview failed", error);
+      setCameraError('Unable to start the live camera preview.');
+    });
+  }, [isCameraOpen, isCameraLoading]);
+
+  useEffect(() => {
+    return () => {
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
   }, []);
 
   // WebSocket Hook
@@ -323,22 +556,19 @@ export default function AIChatPage() {
         if (data.request_id && completedRequestIdsRef.current.has(data.request_id)) {
           return;
         }
-        console.log("Received AI Response:", data);
-        console.log("Pending Components Flag from Backend:", data.pending_components);
-
         setIsLoading(false);
         setStatusMessage('');
 
         const serverComponents = Array.isArray(data.components) ? data.components : [];
+        const serverBlocks = Array.isArray(data.blocks) ? data.blocks : [];
         const recipeResults = Array.isArray(data.recipes) ? data.recipes : [];
-        console.log("[AIChatPage Debug] Server Components:", serverComponents);
-        console.log("[AIChatPage Debug] Recipe Results:", recipeResults);
 
         const resolvedComponents = serverComponents.length > 0
           ? serverComponents
           : buildFallbackRecipeComponents(recipeResults, data.recipes_found);
-
-        console.log("[AIChatPage Debug] Resolved Components (Final):", resolvedComponents);
+        const resolvedBlocks = serverBlocks.length > 0
+          ? serverBlocks
+          : buildFallbackChatBlocks(data.message || '', recipeResults, data.recipes_found);
 
         // Final response
         const newMessage: Message = {
@@ -353,32 +583,30 @@ export default function AIChatPage() {
             recipes_found: data.recipes_found,
             recipes: recipeResults,
             visualization: data.visualization, // Legacy support
+            blocks: resolvedBlocks,
             components: resolvedComponents,
             pending_components: false
           },
           isStreaming: false
         };
-        console.log("Constructed Message Metadata Components:", newMessage.metadata?.components);
 
         const currentStreamId = streamingMessageIdRef.current;
-        console.log(`[AIChatPage Debug] Attempting to update stream ID: ${currentStreamId}`);
 
         if (currentStreamId) {
           setMessages(prev => {
             const index = prev.findIndex(m => m.id === currentStreamId);
-            console.log(`[AIChatPage Debug] Found stream message at index: ${index}`);
 
             if (index === -1) return prev;
 
             return prev.map(msg => {
               if (msg.id === currentStreamId) {
-                console.log("[AIChatPage Debug] Updating message with components:", resolvedComponents);
                 return {
                   ...msg,
                   content: (data.message && data.message.trim().length > 0) ? data.message : msg.content,
                   metadata: {
                     ...msg.metadata,
                     ...newMessage.metadata,
+                    blocks: resolvedBlocks,
                     components: resolvedComponents, // Explicitly ensure components are set
                     pending_components: false
                   },
@@ -418,7 +646,6 @@ export default function AIChatPage() {
         }
 
       } else if (data.type === 'component_update') {
-        console.log("Received Component Update:", data.components);
         // Update the last assistant message with the new components
         setMessages(prev => {
           const newMessages = [...prev];
@@ -430,6 +657,7 @@ export default function AIChatPage() {
                 ...newMessages[i],
                 metadata: {
                   ...newMessages[i].metadata,
+                  blocks: Array.isArray(data.blocks) ? data.blocks : newMessages[i].metadata?.blocks,
                   components: data.components,
                   pending_components: false // Clear the loading flag
                 }
@@ -537,9 +765,13 @@ export default function AIChatPage() {
         const data = response.data;
         const recipeResults = Array.isArray(data.recipes) ? data.recipes : [];
         const serverComponents = Array.isArray(data.components) ? data.components : [];
+        const serverBlocks = Array.isArray(data.blocks) ? data.blocks : [];
         const resolvedComponents = serverComponents.length > 0
           ? serverComponents
           : buildFallbackRecipeComponents(recipeResults, data.recipes_found);
+        const resolvedBlocks = serverBlocks.length > 0
+          ? serverBlocks
+          : buildFallbackChatBlocks(data.message || '', recipeResults, data.recipes_found);
 
         setMessages(prev => [
           ...prev.map((msg) => (
@@ -563,6 +795,7 @@ export default function AIChatPage() {
               mode: data.mode,
               recipes_found: data.recipes_found,
               recipes: recipeResults,
+              blocks: resolvedBlocks,
               components: resolvedComponents,
               pending_components: false,
             },
@@ -666,6 +899,65 @@ export default function AIChatPage() {
       };
       reader.readAsDataURL(file);
     }
+
+    e.target.value = '';
+  };
+
+  const openCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error('Camera capture is not supported in this browser.');
+      return;
+    }
+
+    setCameraError(null);
+    setIsCameraLoading(true);
+
+    try {
+      stopCameraStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      setIsCameraOpen(true);
+    } catch (error) {
+      console.error("Camera access failed", error);
+      setCameraError('Camera access was blocked or unavailable. Check browser permissions and try again.');
+      toast.error('Unable to access the camera.');
+      setIsCameraOpen(true);
+    } finally {
+      setIsCameraLoading(false);
+    }
+  };
+
+  const capturePhoto = async () => {
+    const videoElement = videoRef.current;
+    if (!videoElement || videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+      toast.error('Camera is still starting. Try again in a moment.');
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      toast.error('Failed to capture the photo.');
+      return;
+    }
+
+    context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+    try {
+      const compressed = await compressImage(canvas.toDataURL('image/jpeg', 0.9));
+      setSelectedImage(compressed);
+      closeCameraDialog();
+      toast.success('Photo captured');
+    } catch (error) {
+      console.error("Camera capture compression error", error);
+      toast.error('Failed to process the captured photo.');
+    }
   };
 
   const sampleQueries = [
@@ -678,6 +970,228 @@ export default function AIChatPage() {
   const handleSampleClick = (text: string) => {
     setInputValue(text);
   }
+
+  const renderCameraDialog = () => (
+    <Dialog
+      open={isCameraOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          closeCameraDialog();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden gap-0">
+        <DialogHeader className="px-6 pt-6 pb-3">
+          <DialogTitle>Capture Recipe Photo</DialogTitle>
+          <DialogDescription>
+            Take a clear photo of your meal or recipe and send it to the AI assistant for estimated nutrition and ingredient insights.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="px-6 pb-6 space-y-4">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-slate-950 aspect-[4/3]">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className={cn(
+                "h-full w-full object-cover",
+                (isCameraLoading || !!cameraError) && "opacity-0"
+              )}
+            />
+
+            {isCameraLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/85 text-white">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <p className="text-sm font-medium">Starting camera...</p>
+              </div>
+            )}
+
+            {!isCameraLoading && cameraError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-slate-950/90 px-6 text-center text-white">
+                <Camera className="h-8 w-8 text-white/80" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">Camera unavailable</p>
+                  <p className="text-sm text-white/75">{cameraError}</p>
+                </div>
+                <Button variant="secondary" onClick={() => { void openCamera(); }}>
+                  Retry camera
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={closeCameraDialog}>
+              Cancel
+            </Button>
+            <Button
+              onClick={capturePhoto}
+              disabled={isCameraLoading || !!cameraError}
+              className="gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              Capture photo
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const renderMarkdown = (markdown: string) => (
+    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:mb-2 prose-li:my-0.5">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({ children }) => <h3 className="text-lg font-bold mt-4 mb-2">{children}</h3>,
+          h2: ({ children }) => <h4 className="text-base font-semibold mt-3 mb-1.5">{children}</h4>,
+          h3: ({ children }) => <h5 className="text-sm font-semibold mt-2 mb-1">{children}</h5>,
+          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+          ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-2">{children}</ol>,
+          li: ({ children }) => <li className="text-sm">{children}</li>,
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+          em: ({ children }) => <em className="italic">{children}</em>,
+          code: ({ className, children }) => {
+            const isInline = !className;
+            return isInline ? (
+              <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs">{children}</code>
+            ) : (
+              <code className={`block p-3 rounded-lg bg-muted font-mono text-xs overflow-x-auto ${className}`}>{children}</code>
+            );
+          },
+          blockquote: ({ children }) => (
+            <blockquote className="border-l-4 border-primary/30 pl-4 italic text-muted-foreground my-2">{children}</blockquote>
+          ),
+        }}
+      >
+        {markdown}
+      </ReactMarkdown>
+    </div>
+  );
+
+  const renderChatBlock = (block: ChatBlock, idx: number, messageTimestamp: number) => {
+    switch (block.type) {
+      case 'text':
+        return (
+          <div key={`${block.type}-${idx}-${messageTimestamp}`}>
+            {renderMarkdown(String(block.props.markdown || ''))}
+          </div>
+        );
+      case 'trend_chart': {
+        const chartType = isTrendChartType(block.props.type)
+          ? block.props.type
+          : isTrendChartType(block.props.chart_type)
+            ? block.props.chart_type
+            : 'macro';
+        return (
+          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 min-h-[400px] h-[450px] w-full block" style={{ width: '100%', height: '450px', minWidth: 0 }}>
+            <NutrientTrendChart
+              data={Array.isArray(block.props.data) ? block.props.data : []}
+              days={7}
+              title={block.props.title || 'Trend'}
+              description={block.props.description || 'Generated from your history'}
+              type={chartType}
+              t={typeof block.props.targets === 'object' && block.props.targets !== null ? block.props.targets : DEFAULT_NUTRIENT_TARGETS}
+            />
+          </div>
+        );
+      }
+      case 'deficiency_alert':
+        return (
+          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 w-full">
+            <DeficiencyAlert
+              nutrients={Array.isArray(block.props.nutrients) ? block.props.nutrients as { name: string; data: number[] }[] : []}
+              limits={typeof block.props.limits === 'object' && block.props.limits !== null ? block.props.limits as Record<string, { daily?: number; unit?: string }> : {}}
+            />
+          </div>
+        );
+      case 'recipe_carousel': {
+        const recipes = Array.isArray(block.props.recipes) ? block.props.recipes : [];
+        return (
+          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 -ml-4 -mr-4 md:-ml-0 md:-mr-0">
+            <div className="flex gap-4 overflow-x-auto pb-4 px-4 pt-2 snap-x custom-scrollbar">
+              {recipes.map((recipeData, rIdx) => {
+                const mappedRecipe = mapRecipeDataToRecipe(recipeData);
+                return (
+                  <div key={`${mappedRecipe.id}-${rIdx}`} className="min-w-[280px] w-[280px] snap-center">
+                    <RecipeCard
+                      recipe={mappedRecipe}
+                      variant="compact"
+                      onClick={() => {
+                        setSelectedRecipe(mappedRecipe);
+                        setShowRecipeDialog(true);
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+      case 'stat_card':
+        return (
+          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 p-4 bg-primary/5 rounded-xl border border-primary/20 flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">{block.props.label}</span>
+            <span className="text-xl font-bold text-primary">{block.props.value}</span>
+          </div>
+        );
+      case 'nutrition_facts': {
+        const items = Array.isArray(block.props.items) ? block.props.items : [];
+        if (items.length === 0) return null;
+        return (
+          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 rounded-2xl border border-border bg-muted/20 p-4">
+            {block.props.title && (
+              <h4 className="text-sm font-semibold text-foreground">{block.props.title}</h4>
+            )}
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {items.map((item, itemIdx) => (
+                <div key={`${item.label || 'item'}-${itemIdx}`} className="rounded-xl border border-border bg-background p-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{item.label}</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{item.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      case 'image_strip': {
+        const images = Array.isArray(block.props.images) ? block.props.images : [];
+        if (images.length === 0) return null;
+        return (
+          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 rounded-2xl border border-border bg-muted/10 p-4">
+            {block.props.title && (
+              <h4 className="text-sm font-semibold text-foreground">{block.props.title}</h4>
+            )}
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {images.map((image, imageIdx) => (
+                <div key={`${image.url || 'image'}-${imageIdx}`} className="overflow-hidden rounded-xl border border-border bg-background">
+                  <div className="aspect-square bg-muted">
+                    <img
+                      src={resolveMediaUrl(image.url)}
+                      alt={image.alt || image.caption || 'Chat visual'}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  {(image.caption || image.alt) && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground truncate">
+                      {image.caption || image.alt}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      default:
+        return null;
+    }
+  };
+
   // =====================================================
   // INPUT BOX COMPONENT - Shared between both views
   // =====================================================
@@ -793,6 +1307,18 @@ export default function AIChatPage() {
             className="h-9 px-3 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 gap-2 cursor-pointer"
             onClick={(e) => {
               e.preventDefault();
+              void openCamera();
+            }}
+          >
+            <Camera className="w-4 h-4" />
+            <span className="text-xs font-medium">Camera</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 px-3 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 gap-2 cursor-pointer"
+            onClick={(e) => {
+              e.preventDefault();
               fileInputRef.current?.click();
             }}
           >
@@ -823,6 +1349,7 @@ export default function AIChatPage() {
   if (!hasStarted) {
     return (
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {renderCameraDialog()}
 
 
         {/* Centered Content */}
@@ -890,6 +1417,7 @@ export default function AIChatPage() {
   // =====================================================
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {renderCameraDialog()}
 
 
       {/* Messages Area - Takes remaining space */}
@@ -897,7 +1425,13 @@ export default function AIChatPage() {
         <div className="max-w-3xl mx-auto px-4 py-6">
           <div className="flex flex-col gap-6">
             {messages.map((msg) => {
-              console.log(`[AIChatPage Render] Msg ${msg.id} Role: ${msg.role}, Components:`, msg.metadata?.components?.length);
+              const messageBlocks = buildLegacyBlocks(
+                msg.content,
+                msg.metadata?.blocks,
+                msg.metadata?.components,
+                msg.metadata?.recipes,
+                msg.metadata?.recipes_found
+              );
               return (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -955,105 +1489,16 @@ export default function AIChatPage() {
                         )}
                       </div>
                     ) : (
-                      <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:mb-2 prose-li:my-0.5">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            h1: ({ children }) => <h3 className="text-lg font-bold mt-4 mb-2">{children}</h3>,
-                            h2: ({ children }) => <h4 className="text-base font-semibold mt-3 mb-1.5">{children}</h4>,
-                            h3: ({ children }) => <h5 className="text-sm font-semibold mt-2 mb-1">{children}</h5>,
-                            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                            ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>,
-                            ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-2">{children}</ol>,
-                            li: ({ children }) => <li className="text-sm">{children}</li>,
-                            strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                            em: ({ children }) => <em className="italic">{children}</em>,
-                            code: ({ className, children }) => {
-                              const isInline = !className;
-                              return isInline ? (
-                                <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs">{children}</code>
-                              ) : (
-                                <code className={`block p-3 rounded-lg bg-muted font-mono text-xs overflow-x-auto ${className}`}>{children}</code>
-                              );
-                            },
-                            blockquote: ({ children }) => (
-                              <blockquote className="border-l-4 border-primary/30 pl-4 italic text-muted-foreground my-2">{children}</blockquote>
-                            ),
-                          }}
-                        >
-                          {msg.content}
-                        </ReactMarkdown>
+                      <div className="space-y-0">
+                        {msg.role === 'assistant'
+                          ? messageBlocks.map((block, idx) => renderChatBlock(block, idx, msg.timestamp.getTime()))
+                          : renderMarkdown(msg.content)}
                       </div>
                     )}
-
-
-                    {msg.metadata?.components?.map((comp, idx: number) => {
-                      console.log(`[AIChatPage] Rendering Component ${idx}:`, comp.type, comp.props);
-                      switch (comp.type) {
-                        case 'trend_chart': {
-                          const chartType = isTrendChartType(comp.props.type)
-                            ? comp.props.type
-                            : isTrendChartType(comp.props.chart_type)
-                              ? comp.props.chart_type
-                              : 'macro';
-                          return (
-                            <div key={`${idx}-${msg.timestamp.getTime()}`} className="mt-4 min-h-[400px] h-[450px] w-full block" style={{ width: '100%', height: '450px', minWidth: 0 }}>
-                              <NutrientTrendChart
-                                data={Array.isArray(comp.props.data) ? comp.props.data : []}
-                                days={7}
-                                title={comp.props.title || 'Trend'}
-                                description="Generated from your history"
-                                type={chartType}
-                                t={typeof comp.props.targets === 'object' && comp.props.targets !== null ? comp.props.targets : DEFAULT_NUTRIENT_TARGETS}
-                              />
-                            </div>
-                          );
-                        }
-                        case 'deficiency_alert':
-                          return (
-                            <div key={idx} className="mt-4 w-full">
-                              <DeficiencyAlert
-                                nutrients={Array.isArray(comp.props.nutrients) ? comp.props.nutrients as { name: string; data: number[] }[] : []}
-                                limits={{}}
-                              />
-                            </div>
-                          );
-                        case 'recipe_carousel': {
-                          const recipes = comp.props.recipes || [];
-                          console.log(`[AIChatPage] Carousel Recipes (${recipes.length}):`, recipes[0]);
-                          return (
-                            <div key={idx} className="mt-4 -ml-4 -mr-4 md:-ml-0 md:-mr-0">
-                              <div className="flex gap-4 overflow-x-auto pb-4 px-4 pt-2 snap-x custom-scrollbar">
-                                {recipes.map((recipeData, rIdx) => {
-                                  const mappedRecipe = mapRecipeDataToRecipe(recipeData);
-                                  console.log(`[AIChatPage] Mapped Recipe ${rIdx}:`, mappedRecipe.id, mappedRecipe.recipe_name);
-                                  return (
-                                    <div key={rIdx} className="min-w-[280px] w-[280px] snap-center">
-                                      <RecipeCard recipe={mappedRecipe} variant="compact" />
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        }
-                        case 'stat_card':
-                          // Placeholder for stat card
-                          return (
-                            <div key={idx} className="mt-4 p-4 bg-primary/5 rounded-xl border border-primary/20 flex items-center justify-between">
-                              <span className="text-sm font-medium text-muted-foreground">{comp.props.label}</span>
-                              <span className="text-xl font-bold text-primary">{comp.props.value}</span>
-                            </div>
-                          )
-                        default:
-                          return null;
-                      }
-                    })}
 
                     {/* Loading Skeleton for Pending Components */}
                     {(() => {
                       const shouldShowSkeleton = !!msg.metadata?.pending_components && (!msg.metadata?.components || msg.metadata.components.length === 0);
-                      if (shouldShowSkeleton) console.log("Can see skeleton for message", msg.id);
                       return shouldShowSkeleton ? (
                         <div className="mt-4 w-full bg-card rounded-xl border border-border p-6 space-y-4" style={{ height: '450px', minHeight: '450px' }}>
                           <div className="flex items-center justify-between">
@@ -1068,31 +1513,6 @@ export default function AIChatPage() {
                         </div>
                       ) : null;
                     })()}
-
-                    {/* Fallback for Legacy Metadata (Backward Compatibility) */}
-                    {!msg.metadata?.components && msg.metadata?.recipes && msg.metadata.recipes.length > 0 && (
-                      <div className="mt-4 -ml-4 -mr-4 md:-ml-0 md:-mr-0">
-                        <div className="flex gap-4 overflow-x-auto pb-4 px-4 pt-2 snap-x custom-scrollbar">
-                          {(msg.metadata.recipes || []).map((recipeData, idx) => {
-                            const mappedRecipe = mapRecipeDataToRecipe(recipeData);
-
-                            return (
-                              <div key={idx} className="min-w-[280px] w-[280px] snap-center">
-                                <RecipeCard
-                                  recipe={mappedRecipe}
-                                  variant="compact"
-                                  onClick={() => {
-                                    console.log("Opening recipe:", mappedRecipe);
-                                    setSelectedRecipe(mappedRecipe);
-                                    setShowRecipeDialog(true);
-                                  }}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </motion.div>
               );
