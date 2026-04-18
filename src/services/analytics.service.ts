@@ -2,26 +2,27 @@ import apiClient from './api.client';
 
 export type AnalyticsPeriod = 'weekly' | 'monthly' | '60days' | 'all';
 
+export interface NutrientSeries {
+    name: string;
+    data: number[];
+    unit?: string;
+}
+
+export interface NutrientLimitRange {
+    daily?: number | null;
+    weekly?: number | null;
+    unit?: string;
+}
+
 export interface NutrientStats {
     dates: string[];
     weekdays?: string[];
-    macro_nutrients: {
-        name: string;
-        data: number[];
-    }[];
-    micro_nutrients: {
-        name: string;
-        data: number[];
-    }[];
-    limiting_nutrients: {
-        name: string;
-        data: number[];
-    }[];
+    macro_nutrients: NutrientSeries[];
+    micro_nutrients: NutrientSeries[];
+    limiting_nutrients: NutrientSeries[];
     calories: number[];
     total_calories: string | number;
-    nutrient_limits?: {
-        [nutrientName: string]: { daily?: number | null; weekly?: number | null; unit?: string };
-    };
+    nutrient_limits?: Record<string, NutrientLimitRange>;
 }
 
 export interface ComplianceStats {
@@ -31,8 +32,13 @@ export interface ComplianceStats {
     streak: number;
 }
 
+export interface MealDistributionEntry {
+    name: string;
+    value: number;
+}
+
 export interface MealDistribution {
-    distribution: { name: string; value: number }[];
+    distribution: MealDistributionEntry[];
     total: number;
 }
 
@@ -166,7 +172,7 @@ export const analyticsService = {
         return response.data;
     },
 
-    async getAdvancedStats(patientId?: string): Promise<AdvancedStats> {
+    async getAdvancedStats(days: number = 7, patientId?: string): Promise<AdvancedStats> {
         if (localStorage.getItem('is_guest_mode') === 'true') {
             return {
                 bmr: 1600,
@@ -180,7 +186,7 @@ export const analyticsService = {
                 week_change_pct: 2.5
             };
         }
-        const params: any = { period: 'advanced' };
+        const params: any = { period: 'advanced', days };
         if (patientId) params.patient_id = patientId;
 
         const response = await apiClient.get('/api/analytics/patient/', { params });

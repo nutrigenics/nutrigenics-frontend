@@ -70,10 +70,10 @@ export default function DeficiencyAlert({ nutrients, limits }: DeficiencyAlertPr
                     <CheckCircle2 className="w-8 h-8 text-emerald-600" />
                 </div>
                 <CardTitle className="text-lg font-bold text-emerald-900 mb-2">
-                    Optimal Nutrition
+                    No low-intake alerts
                 </CardTitle>
                 <CardContent>
-                    <p className="text-sm font-medium text-emerald-700/80 max-w-[200px]">You are consistently meeting targets for all tracked nutrients. Keep it up!</p>
+                    <p className="text-sm font-medium text-emerald-700/80 max-w-[220px]">Your tracked nutrients are staying on target in this period.</p>
                 </CardContent>
             </Card>
         );
@@ -86,19 +86,19 @@ export default function DeficiencyAlert({ nutrients, limits }: DeficiencyAlertPr
                     <div className="space-y-1">
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <AlertTriangle className="w-5 h-5" />
-                            Deficiency Risks
+                            Low Intake Alerts
                             <TooltipProvider>
                                 <ShadTooltip>
                                     <TooltipTrigger>
                                         <Info className="w-4 h-4 transition-colors cursor-help" />
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                        <p className="max-w-[200px]">Nutrients where your average intake is below 75% of the recommended daily amount.</p>
+                                        <p className="max-w-[200px]">This shows nutrients that stayed below 75% of the goal during the selected period.</p>
                                     </TooltipContent>
                                 </ShadTooltip>
                             </TooltipProvider>
                         </CardTitle>
-                        <CardDescription className="text-xs font-medium">Nutrients below 75% of target</CardDescription>
+                        <CardDescription className="text-xs font-medium">Nutrients below 75% of goal</CardDescription>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="bg-amber-100 rounded-full px-2 py-0.5 text-xs font-bold text-amber-700">{deficiencies.length} ALERTS</div>
@@ -115,8 +115,8 @@ export default function DeficiencyAlert({ nutrients, limits }: DeficiencyAlertPr
                                 </div>
                                 <p className="text-sm text-gray-600">
                                     {deficiencies.length > 0
-                                        ? `You have ${deficiencies.length} nutrients at risk. Focus on increasing your intake of ${deficiencies[0].name}.`
-                                        : "Your nutrient intake is well-balanced."}
+                                        ? `${deficiencies[0].name} is the main area to improve in this period.`
+                                        : "Your nutrient intake looks balanced."}
                                 </p>
                             </PopoverContent>
                         </Popover>

@@ -5,24 +5,30 @@ import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { hospitalDashboardService } from '@/services/hospital-dashboard.service';
-import type { HospitalDashboardStats } from '@/types';
+import type { Dietitian, HospitalManagedPatient } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export default function HospitalDietitiansPage() {
-    const [stats, setStats] = useState<HospitalDashboardStats | null>(null);
+    const [dietitians, setDietitians] = useState<Dietitian[]>([]);
+    const [patients, setPatients] = useState<HospitalManagedPatient[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedDietitian, setExpandedDietitian] = useState<number | null>(null);
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [searchTerm]);
 
     const fetchData = async () => {
         try {
-            const data = await hospitalDashboardService.getDashboard();
-            setStats(data);
+            setIsLoading(true);
+            const [dietitiansData, patientsData] = await Promise.all([
+                hospitalDashboardService.getManagedDietitians(searchTerm),
+                hospitalDashboardService.getManagedPatients(searchTerm),
+            ]);
+            setDietitians(dietitiansData.results || []);
+            setPatients(patientsData.results || []);
         } catch (error) {
             console.error("Failed to fetch data", error);
         } finally {
@@ -31,29 +37,8 @@ export default function HospitalDietitiansPage() {
     };
 
     const getPatientsForDietitian = (dietitianId: number) => {
-        return (stats?.patients || []).filter((p: any) => p.dietitian_id === dietitianId);
+        return patients.filter((p) => p.dietitian_id === dietitianId);
     };
-
-    // Filter dietitians AND their patients match
-    const filteredDietitians = (stats?.dietitians || []).filter((d: any) => {
-        const query = searchTerm.toLowerCase();
-
-        // Check dietitian details
-        const dietitianMatch =
-            `${d.fname} ${d.lname}`.toLowerCase().includes(query) ||
-            (d.email || '').toLowerCase().includes(query);
-
-        if (dietitianMatch) return true;
-
-        // Check assigned patients details
-        const patients = getPatientsForDietitian(d.id);
-        const hasPatientMatch = patients.some((p: any) =>
-            p.name.toLowerCase().includes(query) ||
-            p.patient_id.toLowerCase().includes(query)
-        );
-
-        return hasPatientMatch;
-    });
 
     if (isLoading) {
         return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-8 h-8 text-primary" /></div>;
@@ -102,7 +87,7 @@ export default function HospitalDietitiansPage() {
 
             {/* Dietitians List */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="space-y-4">
-                {filteredDietitians.length === 0 ? (
+                {dietitians.length === 0 ? (
                     <Card className="p-12 text-center border-dashed border-2 border-slate-200 bg-slate-50 rounded-2xl">
                         <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                             <Users className="w-8 h-8 text-slate-300" />
@@ -111,10 +96,10 @@ export default function HospitalDietitiansPage() {
                         <p className="text-slate-500">Try adjusting your search terms.</p>
                     </Card>
                 ) : (
-                    filteredDietitians.map((dietitian: any, index: number) => {
-                        const patients = getPatientsForDietitian(dietitian.id);
+                    dietitians.map((dietitian, index: number) => {
+                        const assignedPatients = getPatientsForDietitian(dietitian.id);
                         const isExpanded = expandedDietitian === dietitian.id;
-                        const hasPatients = patients.length > 0;
+                        const hasPatients = assignedPatients.length > 0;
 
                         return (
                             <motion.div
@@ -155,9 +140,9 @@ export default function HospitalDietitiansPage() {
                                                     <h3 className="font-bold text-slate-900 text-lg">
                                                         {dietitian.fname} {dietitian.lname}
                                                     </h3>
-                                                    {dietitian.verified && (
+                                                    {dietitian.is_approved && (
                                                         <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-100 font-bold text-xs h-5">
-                                                            Verified
+                                                            Approved
                                                         </Badge>
                                                     )}
                                                 </div>
@@ -165,9 +150,9 @@ export default function HospitalDietitiansPage() {
                                                     <span className="flex items-center gap-1.5">
                                                         <Mail className="w-3.5 h-3.5" /> {dietitian.email}
                                                     </span>
-                                                    {dietitian.specialization && (
+                                                    {dietitian.place && (
                                                         <span className="flex items-center gap-1.5">
-                                                            <Building2 className="w-3.5 h-3.5" /> {dietitian.specialization}
+                                                            <Building2 className="w-3.5 h-3.5" /> {dietitian.place}
                                                         </span>
                                                     )}
                                                 </div>
@@ -178,7 +163,7 @@ export default function HospitalDietitiansPage() {
                                         <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-4 md:pt-0 mt-2 md:mt-0 pl-16 md:pl-0">
                                             <div className="text-right">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-2xl font-black text-slate-900">{patients.length}</span>
+                                                    <span className="text-2xl font-black text-slate-900">{assignedPatients.length}</span>
                                                     <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">Patients</span>
                                                 </div>
                                             </div>
@@ -212,13 +197,13 @@ export default function HospitalDietitiansPage() {
                                                                 Assigned Patients
                                                             </h4>
                                                             <Badge variant="outline" className="bg-white text-slate-500 border-slate-200">
-                                                                {patients.length} Active
+                                                                {assignedPatients.length} Active
                                                             </Badge>
                                                         </div>
 
                                                         {hasPatients ? (
                                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                                {patients.map((patient: any) => (
+                                                                {assignedPatients.map((patient) => (
                                                                     <div key={patient.id} className="group bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-200 flex items-center gap-3">
                                                                         <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center font-bold text-sm shadow-sm">
                                                                             {patient.name?.split(' ').map((n: string) => n[0]).join('') || 'P'}

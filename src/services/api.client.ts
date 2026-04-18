@@ -2,6 +2,7 @@ import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestCo
 
 // Validate required environment variables
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const IS_DEV = import.meta.env.DEV;
 
 if (!API_BASE_URL) {
     throw new Error(
@@ -20,12 +21,27 @@ const apiClient: AxiosInstance = axios.create({
     },
 });
 
+const shouldSkipRefresh = (url?: string | null): boolean => {
+    if (!url) {
+        return false;
+    }
+
+    return [
+        '/api/v1/auth/login/',
+        '/api/v1/auth/register/',
+        '/api/v1/auth/guest-login/',
+        '/api/v1/auth/token/',
+        '/api/v1/auth/token/refresh/',
+        '/api/v1/auth/password-reset/request/',
+        '/api/v1/auth/password-reset/confirm/',
+    ].some((path) => url.includes(path));
+};
+
 // Request interceptor for CSRF token
 apiClient.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         // Get CSRF token from cookie
         const csrfToken = getCookie('csrftoken');
-        console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.headers);
         if (csrfToken && config.headers) {
             config.headers['X-CSRFToken'] = csrfToken;
         }
@@ -51,7 +67,12 @@ apiClient.interceptors.response.use(
     async (error: AxiosError) => {
         const originalRequest = error.config as any;
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (
+            error.response?.status === 401 &&
+            originalRequest &&
+            !originalRequest._retry &&
+            !shouldSkipRefresh(originalRequest.url)
+        ) {
             originalRequest._retry = true;
 
             try {
@@ -67,32 +88,30 @@ apiClient.interceptors.response.use(
                         localStorage.setItem('access_token', response.data.access);
 
                         // Retry the original request
+                        originalRequest.headers = originalRequest.headers || {};
                         originalRequest.headers['Authorization'] = `Bearer ${response.data.access}`;
                         return apiClient(originalRequest);
                     }
                 }
             } catch (refreshError) {
-                console.error('Token refresh failed:', refreshError);
+                if (IS_DEV) {
+                    console.error('Token refresh failed:', refreshError);
+                }
             }
 
             // If refresh fails or no refresh token, trigger logout
-            console.warn('Unauthorized access (401) - triggering logout');
             window.dispatchEvent(new CustomEvent('auth:unauthorized'));
         }
 
-        if (error.response) {
+        if (IS_DEV && error.response) {
             // Server responded with error status
             switch (error.response.status) {
                 case 403:
-                    // Forbidden
                     console.error('Access forbidden:', error.response.data);
                     break;
                 case 404:
-                    // Only log 404 if it is not expected (for search etc 404 is sometimes valid)
-                    // console.error('Resource not found:', error.response.data);
                     break;
                 case 500:
-                    // Server error
                     console.error('Server error:', error.response.data);
                     break;
             }

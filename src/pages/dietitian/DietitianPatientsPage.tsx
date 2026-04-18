@@ -44,6 +44,11 @@ interface PendingRequest {
   created_at: string;
 }
 
+const GENDER_LABELS: Record<string, string> = {
+  M: 'Male',
+  F: 'Female',
+};
+
 export default function DietitianPatientsPage() {
   const navigate = useNavigate();
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -100,7 +105,7 @@ export default function DietitianPatientsPage() {
 
     setIsRequesting(true);
     try {
-      await apiClient.post('/api/v1/dietitian-requests/', {
+      await dietitianDashboardService.requestPatient({
         patient_id: requestForm.patient_id.trim(),
         message: requestForm.message
       });
@@ -112,6 +117,7 @@ export default function DietitianPatientsPage() {
     } catch (error: any) {
       console.error("Failed to send request", error);
       const errorMsg = error.response?.data?.patient_id ||
+        error.response?.data?.error ||
         error.response?.data?.detail ||
         "Failed to send request. Please check the Patient ID.";
       toast.error(Array.isArray(errorMsg) ? errorMsg[0] : errorMsg);
@@ -135,7 +141,10 @@ export default function DietitianPatientsPage() {
 
   const filteredPatients = patients.filter(patient => {
     if (genderFilter === 'all') return true;
-    return patient.gender?.toLowerCase() === genderFilter.toLowerCase();
+    const normalizedGender = patient.gender?.toUpperCase();
+    if (genderFilter === 'male') return normalizedGender === 'M';
+    if (genderFilter === 'female') return normalizedGender === 'F';
+    return true;
   });
 
   if (isLoading) {
@@ -267,7 +276,7 @@ export default function DietitianPatientsPage() {
                     {calculateAge(patient.date_of_birth)}
                   </TableCell>
                   <TableCell className="text-slate-600 capitalize">
-                    {patient.gender || '-'}
+                    {patient.gender ? (GENDER_LABELS[patient.gender.toUpperCase()] || patient.gender) : '-'}
                   </TableCell>
                   <TableCell className="text-slate-600">
                     {formatDate(patient.consent_date)}

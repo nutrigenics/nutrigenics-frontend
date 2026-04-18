@@ -37,6 +37,14 @@ interface RefOption {
   name: string;
 }
 
+const ACTIVITY_LABELS = {
+  sedentary: 'Mostly sitting',
+  light: 'Lightly active',
+  moderate: 'Moderately active',
+  active: 'Very active',
+  very_active: 'Extra active',
+} as const;
+
 export default function ProfilePage() {
   const { profile, refreshUser, logout } = useAuth();
   const navigate = useNavigate();
@@ -62,6 +70,7 @@ export default function ProfilePage() {
     gender: '',
     height: '',
     weight: '',
+    activity_level: '',
     goal: '',
     allergies: [] as number[],
     cuisine_preference: [] as number[],
@@ -99,6 +108,7 @@ export default function ProfilePage() {
         gender: p.gender || '',
         height: p.height || '',
         weight: p.weight || '',
+        activity_level: p.activity_level || '',
         goal: p.goal || '',
         allergies: Array.isArray(p.allergies)
           ? p.allergies.map((a: any) => typeof a === 'object' ? a.id : Number(a))
@@ -154,18 +164,19 @@ export default function ProfilePage() {
       data.append('fname', formData.fname);
       data.append('lname', formData.lname);
       if (formData.phone) data.append('phone_number', formData.phone);
-      if (formData.address) data.append('place', formData.address); // Backend expects 'place' for patients
+      if (formData.address) data.append('address', formData.address);
       if (formData.dob) data.append('date_of_birth', formData.dob);
       if (formData.gender) data.append('gender', formData.gender);
       if (formData.height) data.append('height', formData.height);
       if (formData.weight) data.append('weight', formData.weight);
+      if (formData.activity_level) data.append('activity_level', formData.activity_level);
       if (formData.goal) data.append('goal', formData.goal);
       if (profileImage) data.append('image', profileImage);
 
       // Arrays need to be appended individually for Django ListField or ManyToMany
       formData.allergies.forEach(id => data.append('allergies', id.toString()));
-      formData.cuisine_preference.forEach(id => data.append('cuisine_preferences', id.toString())); // Typically plural
-      formData.diet_preference.forEach(id => data.append('dietary_preferences', id.toString())); // Backend expects dietary_preferences
+      formData.cuisine_preference.forEach(id => data.append('cuisine_preference', id.toString()));
+      formData.diet_preference.forEach(id => data.append('diet_preference', id.toString()));
 
       await authService.updateProfile(data);
       await refreshUser?.();
@@ -354,7 +365,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mt-8">
             <div className="bg-background/80 backdrop-blur-sm p-4 rounded-xl border border-border/50">
               <div className="flex items-center gap-3">
                 <div className={cn("p-2 rounded-lg", "bg-blue-100")}>
@@ -401,6 +412,20 @@ export default function ProfilePage() {
                 <div>
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Goal</p>
                   <p className="text-sm font-bold text-foreground truncate max-w-[100px]">{formData.goal || 'Not set'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-background/80 backdrop-blur-sm p-4 rounded-xl border border-border/50">
+              <div className="flex items-center gap-3">
+                <div className={cn("p-2 rounded-lg", "bg-amber-100")}>
+                  <Activity className={cn("w-4 h-4", "text-amber-500")} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Activity</p>
+                  <p className="text-sm font-bold text-foreground truncate max-w-[140px]">
+                    {ACTIVITY_LABELS[formData.activity_level as keyof typeof ACTIVITY_LABELS] || 'Not set'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -557,6 +582,25 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+
+              <div className="md:col-span-2">
+                <Label htmlFor="activity_level" className={labelClasses}>Activity Level</Label>
+                <select
+                  id="activity_level"
+                  name="activity_level"
+                  value={formData.activity_level}
+                  onChange={handleChange}
+                  disabled={!isEditing}
+                  className={cn(inputClasses, "w-full px-4")}
+                >
+                  <option value="">Select your activity level</option>
+                  <option value="sedentary">Mostly sitting</option>
+                  <option value="light">Lightly active</option>
+                  <option value="moderate">Moderately active</option>
+                  <option value="active">Very active</option>
+                  <option value="very_active">Extra active</option>
+                </select>
+              </div>
 
               <div className="md:col-span-2">
                 <Label htmlFor="goal" className={labelClasses}>Health Goal</Label>

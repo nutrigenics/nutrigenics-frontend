@@ -43,6 +43,15 @@ interface ReferenceData {
 type Gender = 'M' | 'F' | null;
 type WeightUnit = 'kg' | 'Lb';
 type HeightUnit = 'ft.in' | 'cm';
+type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | '';
+
+const ACTIVITY_LEVEL_LABELS = {
+    sedentary: 'Mostly sitting',
+    light: 'Lightly active',
+    moderate: 'Moderately active',
+    active: 'Very active',
+    very_active: 'Extra active',
+} as const;
 
 export default function OnboardingPage() {
     const navigate = useNavigate();
@@ -73,6 +82,7 @@ export default function OnboardingPage() {
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [phone, setPhone] = useState('');
+    const [address, setAddress] = useState('');
     const [dob, setDob] = useState('');
     const [gender, setGender] = useState<Gender>(null);
     const [weight, setWeight] = useState<number | ''>('');
@@ -83,6 +93,7 @@ export default function OnboardingPage() {
     const [selectedCuisines, setSelectedCuisines] = useState<number[]>([]);
     const [selectedDiets, setSelectedDiets] = useState<number[]>([]);
     const [goal, setGoal] = useState('');
+    const [activityLevel, setActivityLevel] = useState<ActivityLevel>('');
     const [consentAccepted, setConsentAccepted] = useState(false);
 
     // --- Dietitian Form Data ---
@@ -176,10 +187,10 @@ export default function OnboardingPage() {
 
     const patientSteps = [
         { id: 'role', title: 'Welcome!', subtitle: 'Choose account type', icon: User },
-        { id: 'name', title: 'Who are you?', subtitle: 'Tell us your name', icon: User },
+        { id: 'name', title: 'Who are you?', subtitle: 'Tell us how to identify and reach you', icon: User },
         { id: 'dob', title: 'Date of Birth', subtitle: 'Your age and gender', icon: Calendar },
         { id: 'body', title: 'Body metrics', subtitle: 'Weight and height', icon: Scale },
-        { id: 'goal', title: 'Your Health Goal', subtitle: 'What do you want to achieve?', icon: Target },
+        { id: 'goal', title: 'Your Health Goal', subtitle: 'Choose your goal and activity level', icon: Target },
         { id: 'allergies', title: 'Any allergies?', subtitle: 'Select all that apply', icon: Heart },
         { id: 'cuisines', title: 'Preferred cuisines', subtitle: 'What do you love to eat?', icon: ChefHat },
         { id: 'diets', title: 'Dietary preferences', subtitle: 'Any special diets?', icon: Salad },
@@ -242,7 +253,7 @@ export default function OnboardingPage() {
                 case 'body':
                     return weight !== '' && weight > 0 && height !== '' && height > 0;
                 case 'goal':
-                    return goal !== '';
+                    return goal !== '' && activityLevel !== '';
                 case 'allergies':
                 case 'cuisines':
                 case 'diets':
@@ -288,6 +299,7 @@ export default function OnboardingPage() {
                     fname: firstName,
                     lname: lastName,
                     phone_number: phone,
+                    address,
                     date_of_birth: dob,
                     gender: gender!,
                     weight: Number(weight),
@@ -295,6 +307,7 @@ export default function OnboardingPage() {
                     height: Number(height),
                     height_unit: heightUnit,
                     goal: goal,
+                    activity_level: activityLevel,
                     allergies: selectedAllergies.map(String),
                     cuisine_preference: selectedCuisines.map(String),
                     diet_preference: selectedDiets.map(String),
@@ -588,6 +601,16 @@ export default function OnboardingPage() {
                                                         <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number <span className="text-gray-400 font-normal">(optional)</span></label>
                                                         <Input type="tel" placeholder="+1 (555) 000-0000" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClasses} />
                                                     </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">City / Address <span className="text-gray-400 font-normal">(optional)</span></label>
+                                                        <Textarea
+                                                            placeholder="City, state or full address"
+                                                            value={address}
+                                                            onChange={(e) => setAddress(e.target.value)}
+                                                            rows={3}
+                                                            className="bg-white/50 border-gray-200 resize-none rounded-xl text-base"
+                                                        />
+                                                    </div>
                                                 </div>
                                             )}
                                             {currentStepData.id === 'dob' && (
@@ -648,6 +671,31 @@ export default function OnboardingPage() {
                                                             </button>
                                                         ))}
                                                     </div>
+                                                    <div className="pt-2">
+                                                        <label className="block text-sm font-medium text-gray-700 mb-3">How active are you on most weeks?</label>
+                                                        <div className="grid gap-3">
+                                                            {[
+                                                                { value: 'sedentary', label: 'Mostly sitting', desc: 'Desk work or low movement most days' },
+                                                                { value: 'light', label: 'Lightly active', desc: 'Regular walking or light exercise a few times a week' },
+                                                                { value: 'moderate', label: 'Moderately active', desc: 'Exercise or active work on several days each week' },
+                                                                { value: 'active', label: 'Very active', desc: 'Hard training or physically active work most days' },
+                                                            ].map(option => (
+                                                                <button
+                                                                    key={option.value}
+                                                                    type="button"
+                                                                    onClick={() => setActivityLevel(option.value as ActivityLevel)}
+                                                                    className={`p-4 rounded-xl border-2 text-left transition-all ${activityLevel === option.value
+                                                                        ? 'border-primary bg-primary/5 shadow-md'
+                                                                        : 'border-gray-200 hover:border-primary/50'
+                                                                        }`}
+                                                                >
+                                                                    <div className="font-semibold text-gray-900">{option.label}</div>
+                                                                    <div className="text-sm text-gray-500 mt-1">{option.desc}</div>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <p className="mt-2 text-xs text-gray-500">You can change this later in your profile if your routine changes.</p>
+                                                    </div>
                                                 </div>
                                             )}
                                             {currentStepData.id === 'allergies' && (
@@ -701,7 +749,35 @@ export default function OnboardingPage() {
                                                                 <p className="text-gray-500 text-xs uppercase tracking-wide">Height</p>
                                                                 <p className="font-medium text-gray-900">{height} {heightUnit}</p>
                                                             </div>
+                                                            <div>
+                                                                <p className="text-gray-500 text-xs uppercase tracking-wide">Goal</p>
+                                                                <p className="font-medium text-gray-900">{goal}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-gray-500 text-xs uppercase tracking-wide">Activity</p>
+                                                                <p className="font-medium text-gray-900">
+                                                                    {activityLevel
+                                                                        ? ACTIVITY_LEVEL_LABELS[activityLevel as keyof typeof ACTIVITY_LEVEL_LABELS]
+                                                                        : 'Not provided'}
+                                                                </p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-gray-500 text-xs uppercase tracking-wide">Contact</p>
+                                                                <p className="font-medium text-gray-900">{phone || 'Not provided'}</p>
+                                                            </div>
+                                                            <div className="col-span-2">
+                                                                <p className="text-gray-500 text-xs uppercase tracking-wide">Location</p>
+                                                                <p className="font-medium text-gray-900">{address || 'Not provided'}</p>
+                                                            </div>
                                                         </div>
+                                                    </div>
+                                                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-5 text-sm text-emerald-900">
+                                                        <p className="font-semibold">Keep your records useful</p>
+                                                        <ul className="mt-2 space-y-1 text-emerald-800">
+                                                            <li>Log meals as regularly as you can so your trends stay accurate.</li>
+                                                            <li>Update your weight at least once a week if you are tracking progress.</li>
+                                                            <li>Add water and symptom updates whenever they matter for your care.</li>
+                                                        </ul>
                                                     </div>
                                                     <label className="flex items-start gap-3 cursor-pointer group p-2 rounded-lg hover:bg-gray-50 transition-colors">
                                                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all mt-0.5 ${consentAccepted ? 'bg-gray-900 border-gray-900' : 'border-gray-300 group-hover:border-gray-500'}`} onClick={() => setConsentAccepted(!consentAccepted)}>

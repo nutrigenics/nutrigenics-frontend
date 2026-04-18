@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { SkeletonStatCard, SkeletonRecipeCard } from '@/components/ui/skeleton';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
-import { Zap, ArrowRight, Flame, ChevronRight, Sparkles } from 'lucide-react';
+import { Zap, ArrowRight, Flame, ChevronRight, Sparkles, Info } from 'lucide-react';
 import { planService } from '@/services/plan.service';
 import { recipeService } from '@/services/recipe.service';
 import { TodaysPlanStatus } from '@/components/dashboard/TodaysPlanStatus';
@@ -18,15 +19,59 @@ import { motion } from 'framer-motion';
 import type { NutrientSummary, Patient, Recipe } from '@/types';
 import { getNutrientTargets, getNutrientColor } from '@/utils/nutrition';
 
+const formatReminderList = (items: string[]) => {
+  if (items.length <= 1) return items[0] || '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+};
+
 export default function DashboardPage() {
   const { profile } = useAuth();
   const [greeting, setGreeting] = useState('Welcome');
   const [currentDate, setCurrentDate] = useState('');
   const [nutrientIntake, setNutrientIntake] = useState<NutrientSummary | null>(null);
   const [recommendedRecipes, setRecommendedRecipes] = useState<Recipe[]>([]);
+  const [recommendationsUsedFallback, setRecommendationsUsedFallback] = useState(false);
+  const [recommendationMessage, setRecommendationMessage] = useState<string | null>(null);
   const [popularRecipes, setPopularRecipes] = useState<Recipe[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const patientProfile = profile as Patient | null;
+  const userName = patientProfile?.fname || 'there';
+  const hasMealsToday = Boolean(nutrientIntake && (nutrientIntake.Calories || 0) > 0);
+  const recordUpdateCard = useMemo(() => {
+    const profileGaps = [
+      !patientProfile?.date_of_birth ? 'date of birth' : null,
+      !patientProfile?.gender ? 'gender' : null,
+      !patientProfile?.activity_level ? 'activity level' : null,
+      !patientProfile?.goal ? 'health goal' : null,
+    ].filter(Boolean) as string[];
+
+    if (profileGaps.length > 0) {
+      return {
+        title: 'Finish your profile',
+        description: `Add ${formatReminderList(profileGaps)} so your calorie target and care insights stay accurate.`,
+        href: '/profile',
+        cta: 'Update profile',
+      };
+    }
+
+    if (!hasMealsToday) {
+      return {
+        title: "Log today's meals",
+        description: 'Adding meals most days keeps your calorie, macro, and limit trends useful.',
+        href: '/meal-plan',
+        cta: 'Open meal plan',
+      };
+    }
+
+    return {
+      title: 'Keep your progress current',
+      description: 'Update your weight at least once a week and add water or symptoms when something changes.',
+      href: '/analytics',
+      cta: 'Review analytics',
+    };
+  }, [hasMealsToday, patientProfile]);
 
   // Set greeting based on time of day
   useEffect(() => {
@@ -70,15 +115,23 @@ export default function DashboardPage() {
         console.warn('Could not fetch meal plan:', err);
       }
 
-      // Fetch all recipes
+      // Fetch recipe recommendations and trending recipes
       try {
-        const allRecipes = await recipeService.getAllRecipes();
-        if (allRecipes && allRecipes.results) {
-          setRecommendedRecipes(allRecipes.results.slice(0, 6));
-          setPopularRecipes(allRecipes.results.slice(6, 12));
-        }
+        const [recommendationResult, popularResult] = await Promise.all([
+          recipeService.getRecommendations(6),
+          recipeService.getPopularRecipes(6),
+        ]);
+
+        setRecommendedRecipes(recommendationResult.recipes || []);
+        setRecommendationsUsedFallback(recommendationResult.usedFallback || false);
+        setRecommendationMessage(recommendationResult.message || null);
+        setPopularRecipes(popularResult || []);
       } catch (err) {
         console.error('Error fetching recipes:', err);
+        setRecommendedRecipes([]);
+        setRecommendationsUsedFallback(true);
+        setRecommendationMessage('Recommendations are not available right now. You can still browse all recipes.');
+        setPopularRecipes([]);
       }
     } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
@@ -133,8 +186,6 @@ export default function DashboardPage() {
     );
   }
 
-  const userName = (profile as Patient)?.fname || 'there';
-
   return (
     <>
       {/* Hero Header - Soft Clean Style */}
@@ -172,6 +223,38 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <Card className="mb-10 border-emerald-100 bg-emerald-50/70 p-6 shadow-soft">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 text-emerald-700">
+              <Sparkles className="h-5 w-5" />
+              <p className="text-sm font-semibold uppercase tracking-wide">Keep your records current</p>
+            </div>
+            <h2 className="mt-2 text-2xl font-bold text-slate-900">Regular updates make your insights more accurate.</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Meals, weight, water, and symptom updates give you and your dietitian a clearer picture over time.
+            </p>
+          </div>
+
+          <div className="grid w-full gap-3 lg:max-w-xl">
+            <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm">
+              <p className="font-semibold text-slate-900">{recordUpdateCard.title}</p>
+              <p className="mt-1 text-sm text-slate-600">{recordUpdateCard.description}</p>
+              <div className="mt-3 rounded-xl bg-emerald-50/80 px-3 py-2 text-xs font-medium text-emerald-800">
+                Simple routine: meals most days, weight once a week, and water or symptoms when something changes.
+              </div>
+              <Link
+                to={recordUpdateCard.href}
+                className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-emerald-700 transition-colors hover:text-emerald-800"
+              >
+                {recordUpdateCard.cta}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Quick Actions - Primary CTAs */}
       {/* <QuickActions /> */}
@@ -335,36 +418,78 @@ export default function DashboardPage() {
       {/* High Nutrient Recipes */}
       <HighNutrientRecipes />
 
-      {/* Recommended & Trending Sections */}
-      {[
-        { title: "Recommended for You", subtitle: "Based on your activity and saved preferences", data: recommendedRecipes, link: "/recipes" },
-        { title: "Trending Now", subtitle: "Community favorites this week", data: popularRecipes, link: "/recipes" }
-      ].map((section, idx) => (
-        section.data.length > 0 && (
-          <div key={idx} className="mb-12 last:mb-0">
-            <div className="flex items-end justify-between mb-8 px-2">
-              <div>
-                <h2 className="text-2xl font-bold text-foreground mb-1">{section.title}</h2>
-                <p className="text-muted-foreground font-medium">{section.subtitle}</p>
-              </div>
-              <Link to={section.link}>
-                <Button variant="ghost" className="text-foreground hover:bg-muted font-medium rounded-lg">
-                  View All <ChevronRight className="ml-1 w-4 h-4" />
-                </Button>
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {section.data.slice(0, 6).map(recipe => (
-                <RecipeCard
-                  key={recipe.id}
-                  recipe={recipe}
-                />
-              ))}
-            </div>
+      {/* Recommended Recipes */}
+      <div className="mb-12">
+        <div className="flex items-end justify-between mb-8 px-2">
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-1">Recommended for You</h2>
+            <p className="text-muted-foreground font-medium">Recipes matched to your profile, history, and safe fallback rules.</p>
           </div>
-        )
-      ))}
+          <Link to="/recipes">
+            <Button variant="ghost" className="text-foreground hover:bg-muted font-medium rounded-lg">
+              View All <ChevronRight className="ml-1 w-4 h-4" />
+            </Button>
+          </Link>
+        </div>
+
+        {recommendationsUsedFallback && recommendationMessage && (
+          <Alert className="mb-6 border-primary/40 bg-primary/5">
+            <Info className="w-4 h-4 text-primary" />
+            <AlertDescription className="text-sm text-foreground">
+              {recommendationMessage}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {recommendedRecipes.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {recommendedRecipes.map(recipe => (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+              />
+            ))}
+          </div>
+        ) : (
+          <Card className="rounded-xl border-dashed border-slate-200 bg-slate-50/60 p-8 text-center">
+            <p className="text-base font-semibold text-slate-900">No recipe matches are ready yet.</p>
+            <p className="mt-2 text-sm text-slate-600">
+              Browse all recipes to save a few favorites, then come back for more personalized suggestions.
+            </p>
+            <Link to="/recipes" className="mt-4 inline-flex">
+              <Button variant="outline" className="rounded-lg">
+                Browse recipes
+              </Button>
+            </Link>
+          </Card>
+        )}
+      </div>
+
+      {/* Trending Recipes */}
+      {popularRecipes.length > 0 && (
+        <div className="mb-12 last:mb-0">
+          <div className="flex items-end justify-between mb-8 px-2">
+            <div>
+              <h2 className="text-2xl font-bold text-foreground mb-1">Trending Now</h2>
+              <p className="text-muted-foreground font-medium">Community favorites this week</p>
+            </div>
+            <Link to="/recipes">
+              <Button variant="ghost" className="text-foreground hover:bg-muted font-medium rounded-lg">
+                View All <ChevronRight className="ml-1 w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {popularRecipes.slice(0, 6).map(recipe => (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }

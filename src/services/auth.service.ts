@@ -1,63 +1,36 @@
 import apiClient from './api.client';
 import type { LoginFormData, SignupFormData, OnboardingFormData, BaseUser } from '../types';
 
+const storeTokens = (data: { access?: string; refresh?: string }) => {
+    if (data.access) {
+        localStorage.setItem('access_token', data.access);
+    }
+    if (data.refresh) {
+        localStorage.setItem('refresh_token', data.refresh);
+    }
+};
+
 export const authService = {
     /**
      * Login with email and password
      * Returns JWT tokens
      */
     async login(credentials: LoginFormData) {
-        const response = await apiClient.post('/api/v1/auth/token/', {
-            email: credentials.email,  // Django backend uses 'email' field, not 'username'
+        const response = await apiClient.post('/api/v1/auth/login/', {
+            email: credentials.email,
             password: credentials.password
         });
 
-        // Store tokens
-        if (response.data.access) {
-            localStorage.setItem('access_token', response.data.access);
-        }
-        if (response.data.refresh) {
-            localStorage.setItem('refresh_token', response.data.refresh);
-        }
-
+        storeTokens(response.data);
         return response.data;
     },
 
     /**
-     * Guest login - auto-login with backend guest account
-     * FOR DEVELOPMENT/TESTING ONLY - Disabled in production
+     * Guest login - only available when the backend explicitly enables it.
      */
-    /**
-     * Guest login - auto-login with backend guest account
-     * role defaults to 'patient'
-     */
-    async guestLogin(role: 'patient' | 'dietitian' | 'hospital' = 'patient') {
-        // We use the specific guest emails setup by the backend script
-        let email = 'guest@nutrigenics.care';
-
-        if (role === 'dietitian') {
-            email = 'dietitian@nutrigenics.care';
-        } else if (role === 'hospital') {
-            email = 'hospital@nutrigenics.care';
-        }
-
-        // We use the standard login endpoint with guest credentials
-        const response = await apiClient.post('/api/v1/auth/token/', {
-            email: email,
-            password: 'guest123'
-        });
-
-        // Store tokens
-        if (response.data.access) {
-            localStorage.setItem('access_token', response.data.access);
-        }
-        if (response.data.refresh) {
-            localStorage.setItem('refresh_token', response.data.refresh);
-        }
-
-        // Set guest mode flag for any frontend mocks if needed (though we are using real backend user now)
-        localStorage.setItem('is_guest_mode', 'true');
-
+    async guestLogin() {
+        const response = await apiClient.post('/api/v1/auth/guest-login/');
+        storeTokens(response.data);
         return response.data;
     },
 
@@ -69,6 +42,7 @@ export const authService = {
             ...data,
             password_confirm: data.password2
         });
+        storeTokens(response.data);
         return response.data;
     },
 
@@ -76,11 +50,6 @@ export const authService = {
      * Get current user profile
      */
     async getProfile(): Promise<BaseUser> {
-        // Check if guest mode
-        if (localStorage.getItem('is_guest_mode') === 'true') {
-            const { MOCK_GUEST_PROFILE } = await import('@/data/mockData');
-            return MOCK_GUEST_PROFILE as any;
-        }
         const response = await apiClient.get('/api/v1/auth/profile/');
         return response.data;
     },
@@ -89,12 +58,6 @@ export const authService = {
      * Update user profile
      */
     async updateProfile(data: Partial<BaseUser> | FormData) {
-        if (localStorage.getItem('is_guest_mode') === 'true') {
-            return { user: { id: 999 } }; // Mock update
-        }
-
-        // If data is FormData, let axios handle the headers (multipart/form-data)
-        // Otherwise it sends JSON
         const response = await apiClient.put('/api/v1/auth/profile/', data);
         return response.data;
     },
@@ -120,17 +83,8 @@ export const authService = {
      */
     async logout() {
         try {
-            // Clear tokens
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
-            // Clear guest flag
-            localStorage.removeItem('is_guest_mode');
-
-            // Optionally call backend logout endpoint if it exists
-            // await apiClient.post('/api/v1/auth/logout/');
-
-            // Optionally call backend logout endpoint if it exists
-            // await apiClient.post('/api/v1/auth/logout/');
         } catch (error) {
             console.error('Logout error:', error);
         }

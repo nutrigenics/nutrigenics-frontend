@@ -34,6 +34,13 @@ const TABS = [
     { id: 'security', label: 'Security', icon: Shield, description: 'Password & authentication' },
 ];
 
+const notificationPreview = {
+    email_updates: true,
+    push_reminders: true,
+    dietitian_messages: true,
+    marketing_emails: false,
+};
+
 export default function SettingsPage() {
     const navigate = useNavigate();
     const { profile, logout } = useAuth();
@@ -41,19 +48,6 @@ export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState('account');
     const [isPasswordOpen, setIsPasswordOpen] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-
-    // Mock Notification Settings
-    const [notifications, setNotifications] = useState({
-        email_updates: true,
-        push_reminders: true,
-        dietitian_messages: true,
-        marketing_emails: false,
-    });
-
-    const handleNotificationToggle = (key: keyof typeof notifications) => {
-        setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
-        toast.success("Preferences updated");
-    };
 
     const handleDeleteAccount = async (password?: string) => {
         try {
@@ -106,11 +100,11 @@ export default function SettingsPage() {
                                 <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-muted/20">
                                     <div className="space-y-0.5">
                                         <h4 className="font-medium text-sm">Download My Data</h4>
-                                        <p className="text-xs text-muted-foreground">Export a copy of your personal data</p>
+                                        <p className="text-xs text-muted-foreground">Data export will be enabled once the testing workflow is finalized.</p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={() => toast.info("Export request started")}>
+                                    <Button variant="outline" size="sm" disabled>
                                         <Download className="w-4 h-4 mr-2" />
-                                        Export
+                                        Coming Soon
                                     </Button>
                                 </div>
                                 <div className="flex items-center justify-between p-4 rounded-xl border border-red-100 bg-red-50/50">
@@ -201,17 +195,21 @@ export default function SettingsPage() {
                         <Card className="border-border/60 shadow-sm">
                             <CardHeader>
                                 <CardTitle>Email Notifications</CardTitle>
-                                <CardDescription>Manage which emails you receive</CardDescription>
+                                <CardDescription>Notification preferences will be customizable in a later release.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
+                                <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                    <span>These controls are preview-only during testing. Core reminders and care alerts still work automatically.</span>
+                                    <Badge variant="outline" className="border-amber-300 bg-white text-amber-700">Preview</Badge>
+                                </div>
                                 <div className="flex items-center justify-between">
                                     <div className="space-y-0.5">
                                         <Label className="text-base">Weekly Summary</Label>
                                         <p className="text-sm text-muted-foreground">Receive a weekly report of your progress</p>
                                     </div>
                                     <Switch
-                                        checked={notifications.email_updates}
-                                        onCheckedChange={() => handleNotificationToggle('email_updates')}
+                                        checked={notificationPreview.email_updates}
+                                        disabled
                                     />
                                 </div>
                                 <Separator />
@@ -221,8 +219,8 @@ export default function SettingsPage() {
                                         <p className="text-sm text-muted-foreground">Receive nutrition tips and feature updates</p>
                                     </div>
                                     <Switch
-                                        checked={notifications.marketing_emails}
-                                        onCheckedChange={() => handleNotificationToggle('marketing_emails')}
+                                        checked={notificationPreview.marketing_emails}
+                                        disabled
                                     />
                                 </div>
                             </CardContent>
@@ -240,8 +238,8 @@ export default function SettingsPage() {
                                         <p className="text-sm text-muted-foreground">Reminders to log meals and water (Breakfast, Lunch, Dinner)</p>
                                     </div>
                                     <Switch
-                                        checked={notifications.push_reminders}
-                                        onCheckedChange={() => handleNotificationToggle('push_reminders')}
+                                        checked={notificationPreview.push_reminders}
+                                        disabled
                                     />
                                 </div>
                                 <Separator />
@@ -251,8 +249,8 @@ export default function SettingsPage() {
                                         <p className="text-sm text-muted-foreground">Get notified when your dietitian messages you</p>
                                     </div>
                                     <Switch
-                                        checked={notifications.dietitian_messages}
-                                        onCheckedChange={() => handleNotificationToggle('dietitian_messages')}
+                                        checked={notificationPreview.dietitian_messages}
+                                        disabled
                                     />
                                 </div>
                             </CardContent>
@@ -295,7 +293,7 @@ export default function SettingsPage() {
                                             <p className="text-sm text-gray-500">Add an extra layer of security to your account</p>
                                         </div>
                                     </div>
-                                    <Switch />
+                                    <Switch disabled />
                                 </div>
                             </CardContent>
                         </Card>
@@ -303,18 +301,18 @@ export default function SettingsPage() {
                         <Card className="border-border/60 shadow-sm">
                             <CardHeader>
                                 <CardTitle>Active Sessions</CardTitle>
-                                <CardDescription>Manage devices logged into your account</CardDescription>
+                                <CardDescription>Session management will be available after the production security rollout.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="flex items-center justify-between py-2">
                                     <div className="flex items-center gap-4">
                                         <Monitor className="w-8 h-8 text-gray-400" />
                                         <div>
-                                            <p className="font-medium text-sm text-gray-900">Chrome on macOS (This Device)</p>
-                                            <p className="text-xs text-gray-500">Current session · Active now</p>
+                                            <p className="font-medium text-sm text-gray-900">Session controls are not available yet</p>
+                                            <p className="text-xs text-gray-500">You can still sign out immediately from the sidebar.</p>
                                         </div>
                                     </div>
-                                    <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100">Active</Badge>
+                                    <Badge variant="outline" className="border-slate-200 text-slate-600">Coming Soon</Badge>
                                 </div>
                             </CardContent>
                         </Card>

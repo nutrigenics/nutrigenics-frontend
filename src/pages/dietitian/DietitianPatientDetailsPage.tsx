@@ -92,12 +92,11 @@ export default function DietitianPatientDetailsPage() {
 
             // 1. Fetch Patient Details
             try {
-                const patientsData = await dietitianDashboardService.getPatients();
-                const patientsList = Array.isArray(patientsData) ? patientsData : patientsData.results || [];
-                const found = patientsList.find((p: any) => p.id === Number(patientId));
-                setPatient(found || null);
+                const patientData = await dietitianDashboardService.getPatient(Number(patientId));
+                setPatient(patientData);
             } catch (e) {
                 console.error("Failed to fetch patient", e);
+                setPatient(null);
             }
 
             // 2. Fetch Nutrients Ref Data
@@ -122,7 +121,7 @@ export default function DietitianPatientDetailsPage() {
                 const [statsData, complianceData, advData, weightData, historyData, distributionData, symptomData] = await Promise.all([
                     analyticsService.getPatientAnalytics(period, patientId),
                     analyticsService.getComplianceStats(days, patientId),
-                    analyticsService.getAdvancedStats(patientId),
+                    analyticsService.getAdvancedStats(days, patientId),
                     analyticsService.getWeightHistory(days, patientId),
                     analyticsService.getDailyHistory(180, patientId),
                     analyticsService.getMealDistribution(days, patientId),

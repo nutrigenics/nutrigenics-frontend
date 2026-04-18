@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
-import { Search, SlidersHorizontal, Sparkles, Timer, Utensils } from 'lucide-react';
+import { Search, SlidersHorizontal, Sparkles, Timer, Utensils, Info } from 'lucide-react';
 import { recipeService } from '@/services/recipe.service';
 import type { Recipe } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +15,8 @@ export default function SearchRecipesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Recipe[]>([]);
   const [recommendedRecipes, setRecommendedRecipes] = useState<Recipe[]>([]);
+  const [recommendationsUsedFallback, setRecommendationsUsedFallback] = useState(false);
+  const [recommendationMessage, setRecommendationMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -35,23 +38,37 @@ export default function SearchRecipesPage() {
   // Stats state
   const [stats, setStats] = useState({ total: 0, time: 0 });
 
+  type SearchOverrides = {
+    cuisines?: string[];
+    diets?: string[];
+    mealTypes?: string[];
+    minTime?: string;
+    maxTime?: string;
+    query?: string;
+  };
+
   // Fetch filters and stats on mount
   useEffect(() => {
     async function loadData() {
       try {
-        const [filters, recipes, popular] = await Promise.all([
+        const [filters, recipes, recommendations] = await Promise.all([
           recipeService.getFilters(),
           recipeService.getAllRecipes({ page: 1 }), // Get count
-          recipeService.getPopularRecipes(4)
+          recipeService.getRecommendations(4)
         ]);
         setFilterOptions(filters);
-        setRecommendedRecipes(popular);
+        setRecommendedRecipes(recommendations.recipes || []);
+        setRecommendationsUsedFallback(recommendations.usedFallback || false);
+        setRecommendationMessage(recommendations.message || null);
         setStats({
           total: recipes.count || 0,
           time: 15 // Mock average time or just static "15min avg"
         });
       } catch (error) {
         console.error("Failed to load initial data", error);
+        setRecommendedRecipes([]);
+        setRecommendationsUsedFallback(true);
+        setRecommendationMessage('Recommendations are not available right now. You can still browse all recipes.');
       }
     }
     loadData();
@@ -73,31 +90,38 @@ export default function SearchRecipesPage() {
     }
   };
 
-  const handleSearch = async (e?: React.FormEvent) => {
+  const handleSearch = async (e?: React.FormEvent, overrides: SearchOverrides = {}) => {
     if (e) e.preventDefault();
 
     try {
       setIsLoading(true);
       setHasSearched(true);
 
-      if (selectedCuisines.length > 0 || selectedDiets.length > 0 || selectedMealTypes.length > 0 || minTime || maxTime) {
+      const cuisines = overrides.cuisines ?? selectedCuisines;
+      const diets = overrides.diets ?? selectedDiets;
+      const mealTypes = overrides.mealTypes ?? selectedMealTypes;
+      const selectedMinTime = overrides.minTime ?? minTime;
+      const selectedMaxTime = overrides.maxTime ?? maxTime;
+      const query = overrides.query ?? searchQuery;
+
+      if (cuisines.length > 0 || diets.length > 0 || mealTypes.length > 0 || selectedMinTime || selectedMaxTime) {
         const results = await recipeService.filterRecipes({
-          cuisine: selectedCuisines,
-          diet: selectedDiets,
-          meal_types: selectedMealTypes,
-          min_time: minTime ? parseInt(minTime) : undefined,
-          max_time: maxTime ? parseInt(maxTime) : undefined,
+          cuisine: cuisines,
+          diet: diets,
+          meal_types: mealTypes,
+          min_time: selectedMinTime ? parseInt(selectedMinTime) : undefined,
+          max_time: selectedMaxTime ? parseInt(selectedMaxTime) : undefined,
         });
         let finalResults = results;
-        if (searchQuery.trim()) {
-          const lowerQ = searchQuery.toLowerCase();
+        if (query.trim()) {
+          const lowerQ = query.toLowerCase();
           finalResults = results.filter((r: Recipe) =>
             r?.recipe_name?.toLowerCase().includes(lowerQ)
           );
         }
         setSearchResults(finalResults);
-      } else if (searchQuery.trim()) {
-        const results = await recipeService.searchRecipes(searchQuery);
+      } else if (query.trim()) {
+        const results = await recipeService.searchRecipes(query);
         setSearchResults(results);
       } else {
         setSearchResults([]);
@@ -112,8 +136,15 @@ export default function SearchRecipesPage() {
   };
 
   const handleAdvancedFilter = () => {
-    handleSearch();
+    void handleSearch();
     setShowFilters(false);
+  };
+
+  const handleQuickMealType = (mealType: string) => {
+    const nextMealTypes = [mealType];
+    setSearchQuery('');
+    setSelectedMealTypes(nextMealTypes);
+    void handleSearch(undefined, { mealTypes: nextMealTypes, query: '' });
   };
 
   const toggleSelection = (list: string[], setList: (l: string[]) => void, item: string) => {
@@ -249,7 +280,7 @@ export default function SearchRecipesPage() {
               {(filterOptions.meal_types.length > 0 ? filterOptions.meal_types.slice(0, 5) : ['Breakfast', 'Lunch', 'Dinner', 'Snack']).map((tag) => (
                 <button
                   key={tag}
-                  onClick={() => { setSelectedMealTypes([tag]); handleSearch(); }}
+                  onClick={() => handleQuickMealType(tag)}
                   className="px-4 py-2 rounded-full bg-white border border-slate-100 text-xs font-medium text-slate-600 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm"
                 >
                   {tag}
@@ -258,17 +289,27 @@ export default function SearchRecipesPage() {
             </motion.div>
 
             {/* Recommended Recipes Section */}
-            {recommendedRecipes.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                className="mb-12"
-              >
-                <div className="flex items-center gap-2 mb-6">
-                  <Sparkles className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-xl font-bold text-slate-900">Recommended for You</h2>
-                </div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="mb-12"
+            >
+              <div className="flex items-center gap-2 mb-6">
+                <Sparkles className="w-5 h-5 text-emerald-500" />
+                <h2 className="text-xl font-bold text-slate-900">Recommended for You</h2>
+              </div>
+
+              {recommendationsUsedFallback && recommendationMessage && (
+                <Alert className="mb-6 border-emerald-200 bg-emerald-50/60">
+                  <Info className="w-4 h-4 text-emerald-700" />
+                  <AlertDescription className="text-sm text-slate-700">
+                    {recommendationMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {recommendedRecipes.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   {recommendedRecipes.map((recipe, index) => (
                     <motion.div
@@ -285,8 +326,16 @@ export default function SearchRecipesPage() {
                     </motion.div>
                   ))}
                 </div>
-              </motion.div>
-            )}
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white/90 p-8 text-center">
+                  <Utensils className="mx-auto mb-4 h-10 w-10 text-slate-300" />
+                  <p className="text-base font-semibold text-slate-900">No recommended recipes yet.</p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Save a few recipes or broaden your preferences, and this section will start personalizing.
+                  </p>
+                </div>
+              )}
+            </motion.div>
           </>
         )}
 

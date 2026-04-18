@@ -23,7 +23,7 @@ export function AnalyticsKPICards({ patient, stats, compliance, advancedStats, d
 
     // Calculations
     const weightImpact = useMemo(() => calculateWeightImpact(advancedStats), [advancedStats]);
-    const t = useMemo(() => getNutrientTargets(patient, advancedStats?.tdee), [patient, advancedStats]);
+    const t = useMemo(() => getNutrientTargets(patient), [patient]);
     const avgs = useMemo(() => calculateAverages(stats, days), [stats, days]);
     const nutrientGaps = useMemo(() => calculateNutrientGaps(stats, days, t), [stats, days, t, avgs]);
     const heartScore = useMemo(() => calculateHeartScore(avgs, t), [avgs, t]);
@@ -76,7 +76,7 @@ export function AnalyticsKPICards({ patient, stats, compliance, advancedStats, d
             {/* Weight Impact */}
             {/* Weight Impact */}
             <AnalyticsMetricCard
-                title="Est. Weight Impact"
+                title="Estimated Weekly Change"
                 titleClassName={weightImpact.color}
                 value={
                     <div className={cn("text-3xl font-black flex items-center gap-2", weightImpact.color)}>
@@ -105,8 +105,11 @@ export function AnalyticsKPICards({ patient, stats, compliance, advancedStats, d
                     </div>
                     <div className="flex justify-between text-xs text-gray-400 mt-1">
                         <span>Intake</span>
-                        <span className="pl-4">Target</span>
+                        <span className="pl-4">Est. burn</span>
                     </div>
+                    <p className="mt-2 text-xs text-gray-500">
+                        This is a guide based on your meals and profile details, not an exact prediction.
+                    </p>
                 </div>
             </AnalyticsMetricCard>
 
@@ -132,7 +135,7 @@ export function AnalyticsKPICards({ patient, stats, compliance, advancedStats, d
             {/* Nutrient Gaps */}
             {/* Nutrient Gaps */}
             <AnalyticsMetricCard
-                title="Nutrient Gaps"
+                title="Low Nutrient Alerts"
                 titleClassName="text-gray-500"
                 badge={
                     nutrientGaps.length === 0 ? (
@@ -167,7 +170,7 @@ export function AnalyticsKPICards({ patient, stats, compliance, advancedStats, d
             {/* Carb Quality */}
             {/* Carb Quality */}
             <AnalyticsMetricCard
-                title="Glycemic Quality"
+                title="Carb Quality"
                 titleClassName="text-gray-500"
                 badge={
                     <div className={cn("text-xs font-bold px-2 py-0.5 rounded-full uppercase", carbQualityScore >= 0.2 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
@@ -198,7 +201,7 @@ export function AnalyticsKPICards({ patient, stats, compliance, advancedStats, d
 
             {/* Heart Score */}
             <AnalyticsMetricCard
-                title="Cardio Score"
+                title="Heart Health Check"
                 titleClassName="text-gray-600"
                 value={
                     <div className={cn("text-3xl font-black flex items-center gap-2", heartScore >= 80 ? 'text-emerald-700' : 'text-orange-700')}>

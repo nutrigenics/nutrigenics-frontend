@@ -6,7 +6,15 @@ import { Info } from 'lucide-react';
 import { COLORS } from '../constants';
 import { CustomTooltip } from './SharedComponents';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useId, useMemo, useState } from 'react';
+import type { NutrientTargets } from '@/utils/nutrition';
+
+type TrendDatumValue = number | string | null | undefined;
+
+export interface AnalyticsTrendDatum {
+    date: string;
+    [key: string]: TrendDatumValue;
+}
 
 // Format axis values
 const formatAxisValue = (value: number): string => {
@@ -15,32 +23,89 @@ const formatAxisValue = (value: number): string => {
 };
 
 interface NutrientTrendChartProps {
-    data: any[];
+    data: AnalyticsTrendDatum[];
     days: number;
     title: string;
     description: string;
     type: 'macro' | 'micro' | 'weight';
-    t: any; // Targets object
+    t: NutrientTargets;
     className?: string;
+    emptyTitle?: string;
+    emptyMessage?: string;
 }
 
-export function NutrientTrendChart({ data, days: _days, title, description, type, t, className }: NutrientTrendChartProps) {
+const MAX_VISIBLE_POINTS = 60;
+
+const condenseTrendData = (rows: AnalyticsTrendDatum[]): AnalyticsTrendDatum[] => {
+    if (rows.length <= MAX_VISIBLE_POINTS) {
+        return rows;
+    }
+
+    const bucketSize = Math.ceil(rows.length / MAX_VISIBLE_POINTS);
+    const condensed: AnalyticsTrendDatum[] = [];
+
+    for (let index = 0; index < rows.length; index += bucketSize) {
+        const chunk = rows.slice(index, index + bucketSize);
+        const firstDate = chunk[0]?.date ?? '';
+        const lastDate = chunk[chunk.length - 1]?.date ?? firstDate;
+        const numericKeys = Array.from(new Set(
+            chunk.flatMap((row) => Object.keys(row).filter((key) => key !== 'date'))
+        ));
+
+        const aggregated: AnalyticsTrendDatum = {
+            date: firstDate === lastDate ? firstDate : `${firstDate} - ${lastDate}`,
+        };
+
+        for (const key of numericKeys) {
+            const values = chunk
+                .map((row) => row[key])
+                .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+
+            aggregated[key] = values.length
+                ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2))
+                : 0;
+        }
+
+        condensed.push(aggregated);
+    }
+
+    return condensed;
+};
+
+export function NutrientTrendChart({
+    data,
+    days: _days,
+    title,
+    description,
+    type,
+    t,
+    className,
+    emptyTitle = 'No chart data available',
+    emptyMessage = 'Add meals in the selected range to see this chart.',
+}: NutrientTrendChartProps) {
     const [useNormalized, setUseNormalized] = useState(false);
     const [hiddenNutrients, setHiddenNutrients] = useState<string[]>([]);
-    const days = _days;
+    const chartId = useId().replace(/:/g, '');
+    const visibleKeys = type === 'macro'
+        ? ['Calories', 'Protein', 'Carbohydrates', 'Fat']
+        : type === 'micro'
+            ? ['Sodium', 'Cholesterol', 'Saturated Fat']
+            : ['weight'];
 
-    const toggleVisibility = (e: any) => {
-        const { value } = e;
+    const toggleVisibility = (e: { value?: string | number }) => {
+        const value = String(e.value ?? '');
         setHiddenNutrients(prev =>
             prev.includes(value) ? prev.filter(n => n !== value) : [...prev, value]
         );
     };
 
-    const hasData = data && data.length > 0;
+    const hasData = data.some((day) =>
+        visibleKeys.some((key) => typeof day[key] === 'number' && Number(day[key]) > 0)
+    );
 
     // Normalize data if needed
-    const chartData = useNormalized ? data.map(day => {
-        const normalized: any = { ...day };
+    const chartData = useMemo(() => (useNormalized ? data.map((day) => {
+        const normalized: AnalyticsTrendDatum = { ...day };
         Object.keys(day).forEach(key => {
             if (key === 'date') return;
             // Map keys to targets
@@ -66,33 +131,36 @@ export function NutrientTrendChart({ data, days: _days, title, description, type
             }
         });
         return normalized;
-    }) : data;
+    }) : data), [data, t, useNormalized]);
+    const displayData = useMemo(() => condenseTrendData(chartData), [chartData]);
+    const displayPointCount = displayData.length;
+    const isCondensed = displayData.length < chartData.length;
 
     // Define gradients based on type
     const renderGradients = () => {
         if (type === 'macro') {
             return (
                 <defs>
-                    <linearGradient id="gradCaloriesLine" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.calories.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.calories.start} stopOpacity={0.0} /></linearGradient>
-                    <linearGradient id="gradProteinLine" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.protein.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.protein.start} stopOpacity={0.0} /></linearGradient>
-                    <linearGradient id="gradCarbsLine" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.carbs.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.carbs.start} stopOpacity={0.0} /></linearGradient>
-                    <linearGradient id="gradFatLine" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.fat.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.fat.start} stopOpacity={0.0} /></linearGradient>
-                    <linearGradient id="gradFiberLine" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.fiber.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.fiber.start} stopOpacity={0.0} /></linearGradient>
+                    <linearGradient id={`${chartId}-gradCaloriesLine`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.calories.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.calories.start} stopOpacity={0.0} /></linearGradient>
+                    <linearGradient id={`${chartId}-gradProteinLine`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.protein.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.protein.start} stopOpacity={0.0} /></linearGradient>
+                    <linearGradient id={`${chartId}-gradCarbsLine`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.carbs.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.carbs.start} stopOpacity={0.0} /></linearGradient>
+                    <linearGradient id={`${chartId}-gradFatLine`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.fat.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.fat.start} stopOpacity={0.0} /></linearGradient>
+                    <linearGradient id={`${chartId}-gradFiberLine`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.fiber.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.fiber.start} stopOpacity={0.0} /></linearGradient>
                 </defs>
             );
 
         } else if (type === 'weight') {
             return (
                 <defs>
-                    <linearGradient id="gradWeightLine" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.4} /><stop offset="95%" stopColor="#10b981" stopOpacity={0.0} /></linearGradient>
+                    <linearGradient id={`${chartId}-gradWeightLine`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.4} /><stop offset="95%" stopColor="#10b981" stopOpacity={0.0} /></linearGradient>
                 </defs>
             );
         } else {
             return (
                 <defs>
-                    <linearGradient id="gradSodiumLine" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.sodium.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.sodium.start} stopOpacity={0.0} /></linearGradient>
-                    <linearGradient id="gradCholesterolLine" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.cholesterol.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.cholesterol.start} stopOpacity={0.0} /></linearGradient>
-                    <linearGradient id="gradSatFatLine" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.satFat.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.satFat.start} stopOpacity={0.0} /></linearGradient>
+                    <linearGradient id={`${chartId}-gradSodiumLine`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.sodium.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.sodium.start} stopOpacity={0.0} /></linearGradient>
+                    <linearGradient id={`${chartId}-gradCholesterolLine`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.cholesterol.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.cholesterol.start} stopOpacity={0.0} /></linearGradient>
+                    <linearGradient id={`${chartId}-gradSatFatLine`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.satFat.start} stopOpacity={0.4} /><stop offset="95%" stopColor={COLORS.satFat.start} stopOpacity={0.0} /></linearGradient>
                 </defs>
             );
         }
@@ -113,6 +181,11 @@ export function NutrientTrendChart({ data, days: _days, title, description, type
                             </div>
                         </CardTitle>
                         <CardDescription>{description}</CardDescription>
+                        {isCondensed && (
+                            <p className="text-xs text-slate-500">
+                                Showing averaged buckets to keep long-range trends readable.
+                            </p>
+                        )}
                     </div>
                     {/* View Mode Toggle */}
                     <div className="bg-gray-100 p-1 rounded-lg flex text-xs">
@@ -121,10 +194,10 @@ export function NutrientTrendChart({ data, days: _days, title, description, type
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="flex-1 min-h-[250px] mt-0 flex items-center justify-center p-6 pt-0 pb-4">
+            <CardContent className="flex-1 h-[360px] min-h-[320px] mt-0 flex items-center justify-center p-6 pt-0 pb-4">
                 {hasData ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData} margin={{ top: 20, right: 35, left: 15, bottom: 25 }}>
+                    <ResponsiveContainer width="100%" height={320}>
+                        <AreaChart data={displayData} margin={{ top: 20, right: 35, left: 15, bottom: 25 }}>
                             {renderGradients()}
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
                             <XAxis
@@ -137,10 +210,10 @@ export function NutrientTrendChart({ data, days: _days, title, description, type
                                 tick={{ fill: '#64748b' }}
                                 interval={0}
                                 tickFormatter={(value, index) => {
-                                    if (days <= 7) return value;
-                                    if (days <= 30) return index % 3 === 0 ? value : '';
-                                    if (days <= 60) return index % 6 === 0 ? value : '';
-                                    return index % 14 === 0 ? value : '';
+                                    if (displayPointCount <= 7) return value;
+                                    if (displayPointCount <= 30) return index % 3 === 0 ? value : '';
+                                    if (displayPointCount <= 60) return index % 6 === 0 ? value : '';
+                                    return index % 10 === 0 ? value : '';
                                 }}
                             />
                             {useNormalized ? (
@@ -168,26 +241,29 @@ export function NutrientTrendChart({ data, days: _days, title, description, type
 
                             {type === 'macro' ? (
                                 <>
-                                    <Area yAxisId={useNormalized ? "left" : "cal"} type="monotone" dataKey={useNormalized ? "CaloriesPct" : "Calories"} name="Calories" stroke={COLORS.calories.solid} fill="url(#gradCaloriesLine)" strokeWidth={3} hide={hiddenNutrients.includes('Calories')} />
-                                    <Area yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "ProteinPct" : "Protein"} name="Protein" stroke={COLORS.protein.solid} fill="url(#gradProteinLine)" strokeWidth={2.5} hide={hiddenNutrients.includes('Protein')} />
-                                    <Area yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "CarbohydratesPct" : "Carbohydrates"} name="Carbohydrates" stroke={COLORS.carbs.solid} fill="url(#gradCarbsLine)" strokeWidth={2.5} hide={hiddenNutrients.includes('Carbohydrates')} />
-                                    <Area yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "FatPct" : "Fat"} name="Fat" stroke={COLORS.fat.solid} fill="url(#gradFatLine)" strokeWidth={2.5} hide={hiddenNutrients.includes('Fat')} />
+                                    <Area yAxisId={useNormalized ? "left" : "cal"} type="monotone" dataKey={useNormalized ? "CaloriesPct" : "Calories"} name="Calories" stroke={COLORS.calories.solid} fill={`url(#${chartId}-gradCaloriesLine)`} strokeWidth={3} hide={hiddenNutrients.includes('Calories')} dot={false} isAnimationActive={false} />
+                                    <Area yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "ProteinPct" : "Protein"} name="Protein" stroke={COLORS.protein.solid} fill={`url(#${chartId}-gradProteinLine)`} strokeWidth={2.5} hide={hiddenNutrients.includes('Protein')} dot={false} isAnimationActive={false} />
+                                    <Area yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "CarbohydratesPct" : "Carbohydrates"} name="Carbohydrates" stroke={COLORS.carbs.solid} fill={`url(#${chartId}-gradCarbsLine)`} strokeWidth={2.5} hide={hiddenNutrients.includes('Carbohydrates')} dot={false} isAnimationActive={false} />
+                                    <Area yAxisId={useNormalized ? "left" : "grams"} type="monotone" dataKey={useNormalized ? "FatPct" : "Fat"} name="Fat" stroke={COLORS.fat.solid} fill={`url(#${chartId}-gradFatLine)`} strokeWidth={2.5} hide={hiddenNutrients.includes('Fat')} dot={false} isAnimationActive={false} />
                                 </>
                             ) : type === 'weight' ? (
                                 <>
-                                    <Area yAxisId={useNormalized ? "left" : "kg"} type="monotone" dataKey={"weight"} name="Weight" stroke="#10b981" fill="url(#gradWeightLine)" strokeWidth={3} />
+                                    <Area yAxisId={useNormalized ? "left" : "kg"} type="monotone" dataKey={"weight"} name="Weight" stroke="#10b981" fill={`url(#${chartId}-gradWeightLine)`} strokeWidth={3} dot={false} isAnimationActive={false} />
                                 </>
                             ) : (
                                 <>
-                                    <Area yAxisId={useNormalized ? "left" : "mg"} type="monotone" dataKey={useNormalized ? "SodiumPct" : "Sodium"} name="Sodium" stroke={COLORS.sodium.solid} fill="url(#gradSodiumLine)" strokeWidth={2.5} hide={hiddenNutrients.includes('Sodium')} />
-                                    <Area yAxisId={useNormalized ? "left" : "mg"} type="monotone" dataKey={useNormalized ? "CholesterolPct" : "Cholesterol"} name="Cholesterol" stroke={COLORS.cholesterol.solid} fill="url(#gradCholesterolLine)" strokeWidth={2.5} hide={hiddenNutrients.includes('Cholesterol')} />
-                                    <Area yAxisId={useNormalized ? "left" : "g"} type="monotone" dataKey={useNormalized ? "Saturated FatPct" : "Saturated Fat"} name="Saturated Fat" stroke={COLORS.satFat.solid} fill="url(#gradSatFatLine)" strokeWidth={2.5} hide={hiddenNutrients.includes('Saturated Fat')} />
+                                    <Area yAxisId={useNormalized ? "left" : "mg"} type="monotone" dataKey={useNormalized ? "SodiumPct" : "Sodium"} name="Sodium" stroke={COLORS.sodium.solid} fill={`url(#${chartId}-gradSodiumLine)`} strokeWidth={2.5} hide={hiddenNutrients.includes('Sodium')} dot={false} isAnimationActive={false} />
+                                    <Area yAxisId={useNormalized ? "left" : "mg"} type="monotone" dataKey={useNormalized ? "CholesterolPct" : "Cholesterol"} name="Cholesterol" stroke={COLORS.cholesterol.solid} fill={`url(#${chartId}-gradCholesterolLine)`} strokeWidth={2.5} hide={hiddenNutrients.includes('Cholesterol')} dot={false} isAnimationActive={false} />
+                                    <Area yAxisId={useNormalized ? "left" : "g"} type="monotone" dataKey={useNormalized ? "Saturated FatPct" : "Saturated Fat"} name="Saturated Fat" stroke={COLORS.satFat.solid} fill={`url(#${chartId}-gradSatFatLine)`} strokeWidth={2.5} hide={hiddenNutrients.includes('Saturated Fat')} dot={false} isAnimationActive={false} />
                                 </>
                             )}
                         </AreaChart>
                     </ResponsiveContainer>
                 ) : (
-                    <div className="flex items-center justify-center h-full text-gray-400">No data available</div>
+                    <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                        <p className="text-sm font-semibold text-slate-700">{emptyTitle}</p>
+                        <p className="mt-2 max-w-sm text-sm text-slate-500">{emptyMessage}</p>
+                    </div>
                 )}
             </CardContent>
         </Card>

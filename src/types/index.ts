@@ -22,11 +22,12 @@ export interface Patient {
     weight: number;
     email: string;
     phone_number?: string;
+    address?: string;
     place?: string;
     dietary_preferences?: string[];
     allergies?: string[];
     health_conditions?: string[];
-    activity_level?: string;
+    activity_level?: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | string;
     goal?: string;
     profile_image?: string;
     consent_accepted?: boolean;
@@ -57,11 +58,19 @@ export interface Dietitian {
     fname: string;
     lname: string;
     email: string;
+    user?: {
+        id: number;
+        email: string;
+    };
     phone_number?: string;
     specialization?: string;
+    place?: string;
     license_number?: string;
     hospital?: Hospital;
-    verified: boolean;
+    hospital_name?: string;
+    verified?: boolean;
+    is_approved?: boolean;
+    patient_count?: number;
     profile_image?: string;
     name?: string; // Read-only full name from API
 }
@@ -266,10 +275,11 @@ export interface PatientOnboardingData {
     height: number;
     weight: number;
     phone_number: string;
+    address?: string;
     dietary_preferences: string[];
     allergies: string[];
     health_conditions: string[];
-    activity_level: string;
+    activity_level: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | string;
     goal: string;
 }
 
@@ -301,7 +311,7 @@ export interface ProfileUpdateFormData {
     dietary_preferences?: string[];
     allergies?: string[];
     health_conditions?: string[];
-    activity_level?: string;
+    activity_level?: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | string;
     goal?: string;
     profile_image?: File;
 }
@@ -336,4 +346,15 @@ export interface HospitalDashboardStats {
         dietitian_email: string;
         created_at: string;
     }[];
+}
+
+export interface HospitalManagedPatient {
+    id: number;
+    patient_id: string;
+    name: string;
+    email?: string | null;
+    gender?: string | null;
+    age?: number | null;
+    dietitian_id?: number | null;
+    dietitian_name?: string;
 }

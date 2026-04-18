@@ -31,7 +31,7 @@ export function MainLayout({ children, pendingRequestsCount = 0, fullHeight = fa
 
                 {/* Page Content */}
                 <main className={`flex-1 flex flex-col min-h-0 ${fullHeight ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-                    <div className={fullHeight ? 'flex-1 flex flex-col min-h-0' : 'max-w-[1600px] w-full mx-auto px-6 lg:px-8 py-8 min-h-[calc(100vh-8rem)]'}>
+                    <div className={fullHeight ? 'flex-1 flex flex-col min-h-0' : 'max-w-[1600px] w-full mx-auto px-6 lg:px-8 pt-8 pb-20 lg:pb-24 min-h-[calc(100vh-8rem)]'}>
                         {children || <Outlet />}
                     </div>
                 </main>

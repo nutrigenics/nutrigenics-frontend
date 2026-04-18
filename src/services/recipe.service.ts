@@ -2,6 +2,12 @@ import apiClient from './api.client';
 import type { Recipe } from '../types';
 import { normalizeRecipePayload } from '@/utils/recipe';
 
+type RecipeRecommendationResponse = {
+    results?: Recipe[];
+    usedFallback?: boolean;
+    message?: string | null;
+};
+
 /**
  * Recipe Service - matches Django backend API v1
  * Base URL: /api/v1/recipes/
@@ -88,17 +94,44 @@ export const recipeService = {
      * Get recipe recommendations for current user
      * GET /api/v1/recipes/recommendations/
      */
-    async getRecommendations() {
+    async getRecommendations(limit: number = 6) {
         if (localStorage.getItem('is_guest_mode') === 'true') {
             const { MOCK_RECIPES } = await import('@/data/mockData');
-            return MOCK_RECIPES.slice(0, 4); // Return top 4 as recommendations
+            return {
+                recipes: MOCK_RECIPES.slice(0, limit),
+                usedFallback: false,
+                message: null,
+            };
         }
         try {
-            const response = await apiClient.get('/api/v1/recipes/recommendations/');
-            return normalizeRecipePayload(response.data);
+            const response = await apiClient.get<RecipeRecommendationResponse | Recipe[]>(
+                '/api/v1/recipes/recommendations/',
+                { params: { limit } }
+            );
+
+            if (Array.isArray(response.data)) {
+                return {
+                    recipes: normalizeRecipePayload(response.data),
+                    usedFallback: false,
+                    message: null,
+                };
+            }
+
+            const normalized = normalizeRecipePayload({
+                results: response.data?.results || [],
+            });
+
+            return {
+                recipes: normalized.results,
+                usedFallback: Boolean(response.data?.usedFallback),
+                message: response.data?.message || null,
+            };
         } catch (error: any) {
-            // Return empty array if not authenticated or error occurs
-            return [];
+            return {
+                recipes: [],
+                usedFallback: true,
+                message: 'Recommendations are not available right now. You can still browse all recipes.',
+            };
         }
     },
 

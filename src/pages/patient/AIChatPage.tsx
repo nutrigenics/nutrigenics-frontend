@@ -5,20 +5,21 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Send, Image as ImageIcon, Sparkles, Loader2, X, StopCircle, Mic, Paperclip, ChefHat, Bot, Camera } from 'lucide-react';
+import { ArrowRight, Image as ImageIcon, Sparkles, Loader2, X, StopCircle, Mic, Paperclip, ChefHat, Bot, Camera, CheckCircle2, Circle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { RecipeDetailDialog } from '@/components/recipes/RecipeDetailDialog';
 import { NutrientTrendChart } from '@/components/analytics/charts/NutrientTrendChart';
 import DeficiencyAlert from '@/components/analytics/DeficiencyAlert';
 import type { Recipe } from '@/types';
+import type { NutrientTargets } from '@/utils/nutrition';
 import { toast } from 'sonner';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import apiClient from '@/services/api.client';
+import { authService } from '@/services/auth.service';
 
 interface RecipeDataShape {
   recipe_id?: number | string;
@@ -43,7 +44,7 @@ interface AssistantComponent {
     title?: string;
     type?: string;
     chart_type?: string;
-    targets?: Record<string, number>;
+    targets?: Partial<NutrientTargets>;
     nutrients?: unknown;
     recipes?: RecipeDataShape[];
     label?: string;
@@ -60,7 +61,7 @@ interface ChatBlock {
     title?: string;
     type?: string;
     chart_type?: string;
-    targets?: Record<string, number>;
+    targets?: Partial<NutrientTargets>;
     nutrients?: unknown;
     recipes?: RecipeDataShape[];
     label?: string;
@@ -132,7 +133,30 @@ interface Message {
 }
 
 const SKELETON_BAR_HEIGHTS = ['26%', '38%', '54%', '33%', '62%', '48%', '29%'] as const;
-const DEFAULT_NUTRIENT_TARGETS = { calories: 2000, protein: 150, carbs: 200, fat: 70 };
+const DEFAULT_NUTRIENT_TARGETS: NutrientTargets = {
+  calories: 2000,
+  protein: 150,
+  carbs: 200,
+  fat: 70,
+  fiber: 25,
+  sugar: 50,
+  sodium: 2300,
+  cholesterol: 300,
+  saturated_fat: 20,
+  unsaturated_fat: 50,
+  trans_fat: 2,
+};
+
+const normalizeNutrientTargets = (targets?: Partial<NutrientTargets> | null): NutrientTargets => ({
+  ...DEFAULT_NUTRIENT_TARGETS,
+  ...(targets || {}),
+});
+
+const LOADING_STEPS = [
+  { label: 'Reading your question', matchers: ['thinking', 'query', 'intent'] },
+  { label: 'Checking your nutrition data', matchers: ['data', 'history', 'fetch', 'record'] },
+  { label: 'Preparing your response', matchers: ['response', 'generate', 'insight', 'write'] },
+] as const;
 
 const isTrendChartType = (value: unknown): value is 'macro' | 'micro' | 'weight' => {
   return value === 'macro' || value === 'micro' || value === 'weight';
@@ -299,25 +323,6 @@ const buildFallbackChatBlocks = (
     },
   });
 
-  const images = recipes
-    .filter((recipe) => !!recipe.recipe_image)
-    .slice(0, 4)
-    .map((recipe) => ({
-      url: resolveRecipeImageUrl(recipe),
-      alt: recipe.recipe_name || 'Recipe image',
-      caption: recipe.recipe_name || 'Recipe',
-    }));
-
-  if (images.length > 0) {
-    blocks.push({
-      type: 'image_strip',
-      props: {
-        title: 'Recipe visuals',
-        images,
-      },
-    });
-  }
-
   const nutritionItems = buildNutritionFactItems(recipes[0]);
   if (nutritionItems.length > 0) {
     blocks.push({
@@ -339,6 +344,16 @@ const buildFallbackChatBlocks = (
   return blocks;
 };
 
+const pruneRedundantRecipeVisuals = (blocks: ChatBlock[]): ChatBlock[] => {
+  const hasRecipeCarousel = blocks.some((block) => block.type === 'recipe_carousel');
+
+  if (!hasRecipeCarousel) {
+    return blocks;
+  }
+
+  return blocks.filter((block) => block.type !== 'image_strip');
+};
+
 const buildLegacyBlocks = (
   content: string,
   blocks: ChatBlock[] | undefined,
@@ -347,7 +362,7 @@ const buildLegacyBlocks = (
   recipesFound: number | undefined
 ): ChatBlock[] => {
   if (Array.isArray(blocks) && blocks.length > 0) {
-    return blocks;
+    return pruneRedundantRecipeVisuals(blocks);
   }
 
   const normalizedBlocks: ChatBlock[] = [];
@@ -365,20 +380,23 @@ const buildLegacyBlocks = (
       type: component.type,
       props: component.props,
     })));
-    return normalizedBlocks;
+    return pruneRedundantRecipeVisuals(normalizedBlocks);
   }
 
-  return buildFallbackChatBlocks(content, recipes, recipesFound);
+  return pruneRedundantRecipeVisuals(buildFallbackChatBlocks(content, recipes, recipesFound));
 };
 
 
 
 // WebSocket URL from Environment
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const wsEnvBase = import.meta.env.VITE_WEBSOCKET_URL || import.meta.env.VITE_WS_BASE_URL;
-const SOCKET_URL = wsEnvBase
-  ? (wsEnvBase.endsWith('/ws/chat/') ? wsEnvBase : `${wsEnvBase.replace(/\/$/, '')}/ws/chat/`)
-  : 'ws://localhost:8000/ws/chat/';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const derivedWsBase = API_BASE_URL
+  ? API_BASE_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')
+  : '';
+const SOCKET_URL = (wsEnvBase || derivedWsBase).endsWith('/ws/chat/')
+  ? (wsEnvBase || derivedWsBase)
+  : `${(wsEnvBase || derivedWsBase).replace(/\/$/, '')}/ws/chat/`;
 
 export default function AIChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -387,6 +405,8 @@ export default function AIChatPage() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [loadingStartedAt, setLoadingStartedAt] = useState<number | null>(null);
+  const [, setLoadingTick] = useState(0);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [showRecipeDialog, setShowRecipeDialog] = useState(false);
@@ -427,6 +447,20 @@ export default function AIChatPage() {
       setInputValue(transcript);
     }
   }, [transcript]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingStartedAt(null);
+      return;
+    }
+
+    setLoadingStartedAt((previous) => previous ?? Date.now());
+    const intervalId = window.setInterval(() => {
+      setLoadingTick((value) => value + 1);
+    }, 250);
+
+    return () => window.clearInterval(intervalId);
+  }, [isLoading]);
 
   const syncStreamingMessageId = (value: string | null) => {
     streamingMessageIdRef.current = value;
@@ -509,8 +543,11 @@ export default function AIChatPage() {
     };
   }, []);
 
+  const socketToken = authService.getAccessToken();
+
   // WebSocket Hook
   const { sendMessage, lastJsonMessage, readyState } = useWebSocket(SOCKET_URL, {
+    queryParams: socketToken ? { token: socketToken } : undefined,
     shouldReconnect: () => !useHttpFallbackRef.current,
     reconnectAttempts: 10,
     reconnectInterval: 1000,
@@ -1040,8 +1077,13 @@ export default function AIChatPage() {
     </Dialog>
   );
 
-  const renderMarkdown = (markdown: string) => (
-    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:mb-2 prose-li:my-0.5">
+  const renderMarkdown = (markdown: string, tone: 'assistant' | 'user' = 'assistant') => (
+    <div className={cn(
+      "prose prose-sm max-w-none prose-p:my-1 prose-headings:mb-2 prose-li:my-0.5",
+      tone === 'assistant'
+        ? "text-foreground prose-headings:text-foreground prose-p:text-foreground/90 prose-li:text-foreground/85 prose-strong:text-foreground prose-code:text-foreground"
+        : "prose-invert text-white prose-headings:text-white prose-p:text-white/95 prose-li:text-white/90 prose-strong:text-white prose-code:text-white"
+    )}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -1057,13 +1099,23 @@ export default function AIChatPage() {
           code: ({ className, children }) => {
             const isInline = !className;
             return isInline ? (
-              <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs">{children}</code>
+              <code className={cn(
+                "px-1.5 py-0.5 rounded font-mono text-xs",
+                tone === 'assistant' ? "bg-muted text-foreground" : "bg-white/12 text-white"
+              )}>{children}</code>
             ) : (
-              <code className={`block p-3 rounded-lg bg-muted font-mono text-xs overflow-x-auto ${className}`}>{children}</code>
+              <code className={cn(
+                "block p-3 rounded-lg font-mono text-xs overflow-x-auto",
+                tone === 'assistant' ? "bg-muted text-foreground" : "bg-black/20 text-white",
+                className
+              )}>{children}</code>
             );
           },
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-primary/30 pl-4 italic text-muted-foreground my-2">{children}</blockquote>
+            <blockquote className={cn(
+              "border-l-4 pl-4 italic my-2",
+              tone === 'assistant' ? "border-primary/30 text-muted-foreground" : "border-white/25 text-white/80"
+            )}>{children}</blockquote>
           ),
         }}
       >
@@ -1087,21 +1139,32 @@ export default function AIChatPage() {
             ? block.props.chart_type
             : 'macro';
         return (
-          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 min-h-[400px] h-[450px] w-full block" style={{ width: '100%', height: '450px', minWidth: 0 }}>
+          <div
+            key={`${block.type}-${idx}-${messageTimestamp}`}
+            className="mt-4 overflow-hidden rounded-[16px] border border-border/70 bg-background/95 p-2 shadow-[0_16px_32px_-26px_rgba(15,23,42,0.18)]"
+          >
             <NutrientTrendChart
               data={Array.isArray(block.props.data) ? block.props.data : []}
               days={7}
               title={block.props.title || 'Trend'}
               description={block.props.description || 'Generated from your history'}
               type={chartType}
-              t={typeof block.props.targets === 'object' && block.props.targets !== null ? block.props.targets : DEFAULT_NUTRIENT_TARGETS}
+              className="h-full border-0 bg-transparent shadow-none"
+              t={normalizeNutrientTargets(
+                typeof block.props.targets === 'object' && block.props.targets !== null
+                  ? block.props.targets as Partial<NutrientTargets>
+                  : undefined
+              )}
             />
           </div>
         );
       }
       case 'deficiency_alert':
         return (
-          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 w-full">
+          <div
+            key={`${block.type}-${idx}-${messageTimestamp}`}
+            className="mt-4 overflow-hidden rounded-[16px] border border-border/70 bg-background/95 p-1 shadow-[0_16px_32px_-26px_rgba(15,23,42,0.18)]"
+          >
             <DeficiencyAlert
               nutrients={Array.isArray(block.props.nutrients) ? block.props.nutrients as { name: string; data: number[] }[] : []}
               limits={typeof block.props.limits === 'object' && block.props.limits !== null ? block.props.limits as Record<string, { daily?: number; unit?: string }> : {}}
@@ -1111,20 +1174,52 @@ export default function AIChatPage() {
       case 'recipe_carousel': {
         const recipes = Array.isArray(block.props.recipes) ? block.props.recipes : [];
         return (
-          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 -ml-4 -mr-4 md:-ml-0 md:-mr-0">
-            <div className="flex gap-4 overflow-x-auto pb-4 px-4 pt-2 snap-x custom-scrollbar">
+          <div
+            key={`${block.type}-${idx}-${messageTimestamp}`}
+            className="mt-4 overflow-hidden rounded-[16px] border border-border/70 bg-background/95 py-3 shadow-[0_16px_32px_-26px_rgba(15,23,42,0.18)]"
+          >
+            <div className="flex gap-4 overflow-x-auto pb-3 px-4 pt-1 snap-x custom-scrollbar">
               {recipes.map((recipeData, rIdx) => {
                 const mappedRecipe = mapRecipeDataToRecipe(recipeData);
+                const calories = toNumber(recipeData.nutrients?.Calories || recipeData.nutrients?.Energy);
                 return (
-                  <div key={`${mappedRecipe.id}-${rIdx}`} className="min-w-[280px] w-[280px] snap-center">
-                    <RecipeCard
-                      recipe={mappedRecipe}
-                      variant="compact"
-                      onClick={() => {
+                  <div
+                    key={`${mappedRecipe.id}-${rIdx}`}
+                    className="min-w-[220px] w-[220px] snap-center cursor-pointer overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm transition-all hover:border-primary/20 hover:shadow-md"
+                    onClick={() => {
+                      setSelectedRecipe(mappedRecipe);
+                      setShowRecipeDialog(true);
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
                         setSelectedRecipe(mappedRecipe);
                         setShowRecipeDialog(true);
-                      }}
-                    />
+                      }
+                    }}
+                  >
+                    <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
+                      <img
+                        src={resolveRecipeImageUrl(recipeData)}
+                        alt={mappedRecipe.recipe_name}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/illustrations/recipe-placeholder.png';
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2 p-3">
+                      <h4 className="line-clamp-2 text-sm font-semibold text-foreground">
+                        {mappedRecipe.recipe_name}
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        {mappedRecipe.recipe_time_minutes ? <span>{mappedRecipe.recipe_time_minutes} min</span> : null}
+                        {mappedRecipe.recipe_time_minutes && calories > 0 ? <span className="h-1 w-1 rounded-full bg-border" /> : null}
+                        {calories > 0 ? <span>{calories.toFixed(0)} kcal</span> : null}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -1134,23 +1229,37 @@ export default function AIChatPage() {
       }
       case 'stat_card':
         return (
-          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 p-4 bg-primary/5 rounded-xl border border-primary/20 flex items-center justify-between">
-            <span className="text-sm font-medium text-muted-foreground">{block.props.label}</span>
-            <span className="text-xl font-bold text-primary">{block.props.value}</span>
+          <div
+            key={`${block.type}-${idx}-${messageTimestamp}`}
+            className="mt-4 overflow-hidden rounded-[14px] border border-primary/15 bg-primary/5 px-4 py-3"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary/70">Summary</div>
+                <span className="mt-1 block text-sm font-medium text-foreground/75">{block.props.label}</span>
+              </div>
+              <span className="text-2xl font-semibold tracking-tight text-foreground">{block.props.value}</span>
+            </div>
           </div>
         );
       case 'nutrition_facts': {
         const items = Array.isArray(block.props.items) ? block.props.items : [];
         if (items.length === 0) return null;
         return (
-          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 rounded-2xl border border-border bg-muted/20 p-4">
+          <div
+            key={`${block.type}-${idx}-${messageTimestamp}`}
+            className="mt-4 rounded-[16px] border border-border/70 bg-background/95 p-4 shadow-[0_16px_32px_-26px_rgba(15,23,42,0.18)]"
+          >
             {block.props.title && (
-              <h4 className="text-sm font-semibold text-foreground">{block.props.title}</h4>
+              <h4 className="mb-3 text-sm font-semibold text-foreground">{block.props.title}</h4>
             )}
             <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
               {items.map((item, itemIdx) => (
-                <div key={`${item.label || 'item'}-${itemIdx}`} className="rounded-xl border border-border bg-background p-3">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{item.label}</div>
+                <div
+                  key={`${item.label || 'item'}-${itemIdx}`}
+                  className="rounded-[12px] border border-border/70 bg-card p-3"
+                >
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{item.label}</div>
                   <div className="mt-1 text-sm font-semibold text-foreground">{item.value}</div>
                 </div>
               ))}
@@ -1162,13 +1271,19 @@ export default function AIChatPage() {
         const images = Array.isArray(block.props.images) ? block.props.images : [];
         if (images.length === 0) return null;
         return (
-          <div key={`${block.type}-${idx}-${messageTimestamp}`} className="mt-4 rounded-2xl border border-border bg-muted/10 p-4">
+          <div
+            key={`${block.type}-${idx}-${messageTimestamp}`}
+            className="mt-4 rounded-[16px] border border-border/70 bg-background/95 p-4 shadow-[0_16px_32px_-26px_rgba(15,23,42,0.18)]"
+          >
             {block.props.title && (
-              <h4 className="text-sm font-semibold text-foreground">{block.props.title}</h4>
+              <h4 className="mb-3 text-sm font-semibold text-foreground">{block.props.title}</h4>
             )}
             <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
               {images.map((image, imageIdx) => (
-                <div key={`${image.url || 'image'}-${imageIdx}`} className="overflow-hidden rounded-xl border border-border bg-background">
+                <div
+                  key={`${image.url || 'image'}-${imageIdx}`}
+                  className="overflow-hidden rounded-[12px] border border-border/70 bg-card"
+                >
                   <div className="aspect-square bg-muted">
                     <img
                       src={resolveMediaUrl(image.url)}
@@ -1192,13 +1307,92 @@ export default function AIChatPage() {
     }
   };
 
+  const getLoadingStepIndex = () => {
+    const normalized = statusMessage.toLowerCase();
+    const elapsed = loadingStartedAt ? Date.now() - loadingStartedAt : 0;
+    let derivedIndex = 0;
+
+    if (elapsed >= 600) {
+      derivedIndex = 1;
+    }
+    if (elapsed >= 1400) {
+      derivedIndex = 2;
+    }
+
+    if (!normalized) {
+      return derivedIndex;
+    }
+
+    const matchedIndex = LOADING_STEPS.findIndex((step) =>
+      step.matchers.some((matcher) => normalized.includes(matcher))
+    );
+
+    if (matchedIndex >= 0) {
+      return Math.max(derivedIndex, matchedIndex);
+    }
+
+    return derivedIndex;
+  };
+
+  const renderMacLoader = () => (
+    <div className="relative h-4 w-4 animate-spin" aria-hidden="true">
+      {Array.from({ length: 12 }).map((_, index) => (
+        <span
+          key={index}
+          className="absolute left-1/2 top-1/2 h-[4px] w-[2px] rounded-full bg-primary"
+          style={{
+            transform: `translate(-50%, -50%) rotate(${index * 30}deg) translateY(-6px)`,
+            opacity: 1 - index * 0.07,
+          }}
+        />
+      ))}
+    </div>
+  );
+
+  const renderLoadingSteps = () => {
+    const activeStepIndex = getLoadingStepIndex();
+
+    return (
+      <div className="flex items-start gap-3">
+        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/10 bg-primary/5">
+          <img src={logo} alt="AI" className="h-4 w-4" />
+        </div>
+        <div className="rounded-[14px] border border-border/70 bg-card px-4 py-3 shadow-[0_16px_32px_-26px_rgba(15,23,42,0.18)]">
+          <div className="space-y-3">
+            {LOADING_STEPS.map((step, index) => {
+              const isDone = index < activeStepIndex;
+              const isActive = index === activeStepIndex;
+
+              return (
+                <div key={step.label} className="flex items-center gap-3 text-sm">
+                  {isDone ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                  ) : isActive ? (
+                    renderMacLoader()
+                  ) : (
+                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+                  )}
+                  <span className={cn(
+                    isDone || isActive ? "text-foreground/85" : "text-muted-foreground"
+                  )}>
+                    {step.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // =====================================================
   // INPUT BOX COMPONENT - Shared between both views
   // =====================================================
   const renderInputBox = () => (
     <div className={cn(
-      "w-full relative bg-card rounded-xl border shadow-premium overflow-hidden flex flex-col ring-2 ring-offset-4",
-      isRecording ? "ring-destructive border-destructive/50" : "border-border ring-border focus-within:border-primary focus-within:ring-primary/50 focus-within:shadow-premium-lg"
+      "w-full relative overflow-hidden rounded-[30px] border bg-card/95 shadow-[0_28px_60px_-42px_rgba(15,23,42,0.28)] backdrop-blur-sm flex flex-col",
+      isRecording ? "border-destructive/40" : "border-border/70"
     )}>
       {/* Image Preview Area */}
       <AnimatePresence>
@@ -1207,9 +1401,9 @@ export default function AIChatPage() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="px-4 pt-4 pb-2 border-b border-border/50 bg-muted/20"
+            className="px-4 pt-4 pb-2"
           >
-            <div className="relative inline-flex items-center gap-3 bg-background border border-border rounded-xl p-2 pr-4">
+            <div className="relative inline-flex items-center gap-3 rounded-2xl border border-border/70 bg-background px-3 py-2 pr-4">
               <img src={selectedImage} alt="Preview" className="h-12 w-12 object-cover rounded-lg bg-muted" />
               <div className="flex flex-col">
                 <span className="text-xs font-medium">Image attached</span>
@@ -1234,7 +1428,7 @@ export default function AIChatPage() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="px-4 pt-2 text-sm text-muted-foreground/80 italic"
+            className="px-5 pt-1 text-sm text-muted-foreground/80 italic"
           >
             {interimTranscript}...
           </motion.div>
@@ -1271,7 +1465,7 @@ export default function AIChatPage() {
           }
         }}
         placeholder={isRecording ? "Listening..." : "Ask anything or paste an image..."}
-        className="w-full min-h-[60px] max-h-[200px] border-none shadow-none resize-none px-4 py-4 text-base bg-transparent focus-visible:ring-0"
+        className="w-full min-h-[60px] max-h-[200px] !border-0 !shadow-none resize-none px-5 py-4 text-base bg-transparent !outline-none focus:!outline-none focus:!ring-0 focus:!ring-offset-0 focus-visible:!outline-none focus-visible:!ring-0 focus-visible:!ring-offset-0"
         rows={1}
       />
 
@@ -1284,17 +1478,17 @@ export default function AIChatPage() {
       />
 
       {/* Bottom Actions Row */}
-      <div className="flex justify-between items-center px-2 pb-2">
-        <div className="flex gap-1">
+      <div className="flex items-center justify-between px-4 pb-4 pt-1">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleRecording}
             className={cn(
-              "h-9 w-9 rounded-full transition-all duration-300",
+              "h-10 w-10 rounded-full border border-transparent transition-all duration-300",
               isRecording
-                ? "text-destructive bg-destructive/10 hover:bg-destructive/20 animate-pulse scale-110"
-                : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                ? "text-destructive bg-destructive/10 border-destructive/20 hover:bg-destructive/15 animate-pulse"
+                : "text-muted-foreground bg-muted/35 hover:text-primary hover:bg-primary/8"
             )}
             title={isRecording ? "Stop recording" : "Voice input"}
             aria-label={isRecording ? "Stop voice recording" : "Start voice recording"}
@@ -1304,7 +1498,7 @@ export default function AIChatPage() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 px-3 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 gap-2 cursor-pointer"
+            className="h-10 rounded-full border border-border/70 bg-muted/25 px-3 text-muted-foreground hover:text-primary hover:bg-primary/5 gap-2 cursor-pointer"
             onClick={(e) => {
               e.preventDefault();
               void openCamera();
@@ -1316,7 +1510,7 @@ export default function AIChatPage() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 px-3 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 gap-2 cursor-pointer"
+            className="h-10 rounded-full border border-border/70 bg-muted/25 px-3 text-muted-foreground hover:text-primary hover:bg-primary/5 gap-2 cursor-pointer"
             onClick={(e) => {
               e.preventDefault();
               fileInputRef.current?.click();
@@ -1333,11 +1527,13 @@ export default function AIChatPage() {
           disabled={!canSendMessages}
           aria-label="Send chat message"
           className={cn(
-            "h-9 w-9 rounded-full transition-all duration-200",
-            canSendMessages ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transform hover:scale-105" : "bg-muted text-muted-foreground"
+            "h-11 w-11 rounded-full transition-all duration-200",
+            canSendMessages
+              ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_14px_28px_-18px_rgba(16,185,129,0.8)]"
+              : "bg-muted text-muted-foreground"
           )}
         >
-          <Send className="w-4 h-4 ml-0.5" />
+          <ArrowRight className="w-4 h-4" />
         </Button>
       </div>
     </div>
@@ -1432,87 +1628,103 @@ export default function AIChatPage() {
                 msg.metadata?.recipes,
                 msg.metadata?.recipes_found
               );
+              const isCompactUserBubble =
+                msg.role === 'user' &&
+                !msg.metadata?.image &&
+                !msg.content.includes('\n') &&
+                msg.content.trim().length <= 56;
+
               return (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={msg.id}
                   className={cn(
-                    "flex gap-4 max-w-[90%]",
-                    msg.role === 'user' ? "self-end flex-row-reverse" : "self-start"
+                    "flex max-w-[94%] md:max-w-[90%]",
+                    msg.role === 'user' ? "self-end" : "self-start"
                   )}
                 >
-                  {/* Icons removed per user request */}
+                  <div className={cn("flex items-start gap-3", msg.role === 'user' && "flex-row-reverse")}>
+                    {msg.role === 'assistant' && (
+                      <div className="mt-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_12px_24px_-18px_rgba(16,185,129,0.45)]">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+                    )}
 
-                  <div className={cn(
-                    "group relative p-6 rounded-3xl text-sm md:text-base leading-relaxed shadow-sm max-w-full",
-                    msg.role === 'assistant'
-                      ? "bg-card border border-border text-card-foreground"
-                      : "bg-primary text-primary-foreground"
-                  )}>
-                    {/* ... (rest of message content) ... */}
+                    <div className={cn(
+                      "group relative max-w-full overflow-hidden text-sm md:text-base leading-relaxed",
+                      msg.role === 'assistant'
+                        ? "min-w-0 flex-1 rounded-[18px] border border-border/70 bg-card/95 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.22)]"
+                        : cn(
+                          "border border-primary/10 bg-primary text-primary-foreground shadow-[0_16px_28px_-22px_rgba(16,185,129,0.45)]",
+                          isCompactUserBubble ? "rounded-full" : "rounded-[24px]"
+                        )
+                    )}>
+                      <div className="relative p-4 md:p-5">
+                        {msg.type === 'image' && (
+                          <div className="mb-4">
+                            {msg.metadata?.image ? (
+                              <img
+                                src={msg.metadata.image}
+                                alt="User Upload"
+                                className={cn(
+                                  "max-w-[220px] max-h-[220px] object-contain rounded-2xl p-1 cursor-pointer hover:opacity-90 transition-opacity",
+                                  msg.role === 'assistant'
+                                    ? "border border-border/70 bg-muted/20"
+                                    : "border border-white/10 bg-black/5"
+                                )}
+                              />
+                            ) : (
+                              <div className={cn(
+                                "inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm",
+                                msg.role === 'assistant'
+                                  ? "bg-primary/5 text-muted-foreground"
+                                  : "bg-white/10 text-white/80"
+                              )}>
+                                <ImageIcon className="w-4 h-4" />
+                                <span>Analyzing image...</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
-                    {msg.type === 'image' && (
-                      <div className="mb-2">
-                        {msg.metadata?.image ? (
-                          <img
-                            src={msg.metadata.image}
-                            alt="User Upload"
-                            className="max-w-[200px] max-h-[200px] object-contain rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                          />
+                        {msg.role === 'assistant' && msg.id === streamingMessageId && isLoading && !msg.content ? (
+                          renderLoadingSteps()
                         ) : (
-                          <div className="flex items-center gap-2 text-inherit/80">
-                            <ImageIcon className="w-4 h-4" />
-                            <span className="text-sm">Analyzing image...</span>
+                          <div className={cn("space-y-0", msg.role === 'assistant' && "space-y-1")}>
+                            {msg.role === 'assistant'
+                              ? messageBlocks.map((block, idx) => renderChatBlock(block, idx, msg.timestamp.getTime()))
+                              : renderMarkdown(msg.content, 'user')}
                           </div>
                         )}
-                      </div>
-                    )}
 
-                    {msg.role === 'assistant' && msg.id === streamingMessageId && isLoading && !msg.content ? (
-                      <div className="flex items-center gap-2">
-                        <motion.div className="flex gap-1">
-                          {[0, 1, 2].map((i) => (
-                            <motion.span
-                              key={i}
-                              className="w-2 h-2 bg-primary/60 rounded-full"
-                              animate={{ y: [0, -6, 0] }}
-                              transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.1 }}
-                            />
-                          ))}
-                        </motion.div>
-                        {statusMessage && (
-                          <span className="text-xs text-muted-foreground ml-2 flex items-center gap-1.5">
-                            <Sparkles className="w-3 h-3" />
-                            {statusMessage}
-                          </span>
+                        {(() => {
+                          const shouldShowSkeleton = !!msg.metadata?.pending_components && (!msg.metadata?.components || msg.metadata.components.length === 0);
+                          return shouldShowSkeleton ? (
+                            <div className="mt-4 overflow-hidden rounded-[16px] border border-border/70 bg-background/95 p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="space-y-2">
+                                  <div className="h-3 w-24 rounded-full bg-primary/10" />
+                                  <div className="h-6 w-40 rounded-full bg-muted/50 animate-pulse" />
+                                </div>
+                                <div className="h-4 w-28 rounded-full bg-muted/35 animate-pulse" />
+                              </div>
+                              <div className="mt-4 h-[280px] w-full rounded-[12px] bg-muted/25 p-4">
+                                <div className="flex h-full items-end justify-between gap-2">
+                                  {SKELETON_BAR_HEIGHTS.map((height, i) => (
+                                    <div key={i} className="w-full rounded-t-xl bg-gradient-to-t from-primary/35 to-primary/10" style={{ height }} />
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null;
+                        })()}
+
+                        {msg.role === 'user' && (
+                          <div className="pointer-events-none absolute bottom-3 right-[-7px] h-3 w-3 rounded-full bg-primary" />
                         )}
                       </div>
-                    ) : (
-                      <div className="space-y-0">
-                        {msg.role === 'assistant'
-                          ? messageBlocks.map((block, idx) => renderChatBlock(block, idx, msg.timestamp.getTime()))
-                          : renderMarkdown(msg.content)}
-                      </div>
-                    )}
-
-                    {/* Loading Skeleton for Pending Components */}
-                    {(() => {
-                      const shouldShowSkeleton = !!msg.metadata?.pending_components && (!msg.metadata?.components || msg.metadata.components.length === 0);
-                      return shouldShowSkeleton ? (
-                        <div className="mt-4 w-full bg-card rounded-xl border border-border p-6 space-y-4" style={{ height: '450px', minHeight: '450px' }}>
-                          <div className="flex items-center justify-between">
-                            <div className="h-6 w-32 bg-muted/40 rounded animate-pulse" />
-                            <div className="h-4 w-24 bg-muted/30 rounded animate-pulse" />
-                          </div>
-                          <div className="h-[350px] w-full bg-muted/10 rounded-lg animate-pulse flex items-end justify-between p-4 gap-2">
-                            {SKELETON_BAR_HEIGHTS.map((height, i) => (
-                              <div key={i} className="w-full bg-muted/30 rounded-t-sm" style={{ height }} />
-                            ))}
-                          </div>
-                        </div>
-                      ) : null;
-                    })()}
+                    </div>
                   </div>
                 </motion.div>
               );
@@ -1525,27 +1737,7 @@ export default function AIChatPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="self-start max-w-[90%]"
               >
-                <div className="bg-card border border-border text-card-foreground p-5 rounded-3xl shadow-sm space-y-3 min-w-[200px]">
-                  <div className="flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                    <span className="text-sm font-medium text-foreground">Processing Process</span>
-                  </div>
-                  {/* Simulated Steps for Engagement */}
-                  <div className="space-y-2 pl-8">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      <span>Analyzing query intent...</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse delay-75">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      <span>Fetching health data...</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse delay-150">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      <span>Generating insights...</span>
-                    </div>
-                  </div>
-                </div>
+                {renderLoadingSteps()}
               </motion.div>
             )}
 
@@ -1554,7 +1746,7 @@ export default function AIChatPage() {
         </div>
       </div>
       {/* Input Area - Fixed at absolute bottom */}
-      <div className="relative z-10 shrink-0 border-t border-border/40 bg-background/95 backdrop-blur-sm">
+      <div className="relative z-10 shrink-0 bg-gradient-to-t from-background via-background/95 to-transparent pt-3">
         <RecipeDetailDialog
           recipe={selectedRecipe}
           open={showRecipeDialog}

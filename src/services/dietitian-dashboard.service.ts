@@ -1,4 +1,5 @@
 import apiClient from './api.client';
+import type { Patient } from '@/types';
 
 export interface DashboardStats {
     total_patients: number;
@@ -18,7 +19,12 @@ export const dietitianDashboardService = {
 
     async getPatients(search?: string) {
         const params = search ? { search } : {};
-        const response = await apiClient.get('/api/v1/patients/', { params });
+        const response = await apiClient.get('/api/v1/dietitians/managed-patients/', { params });
+        return response.data;
+    },
+
+    async getPatient(id: number) {
+        const response = await apiClient.get<Patient>(`/api/v1/patients/${id}/`);
         return response.data;
     },
 

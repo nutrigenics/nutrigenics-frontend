@@ -1,10 +1,22 @@
 import apiClient from './api.client';
-import type { Hospital } from '../types';
+import type { Dietitian, Hospital, HospitalManagedPatient } from '../types';
 
 export const hospitalDashboardService = {
     // Dashboard Overviews
     async getDashboard() {
         const response = await apiClient.get('/api/v1/hospitals/dashboard/');
+        return response.data;
+    },
+
+    async getManagedDietitians(search?: string) {
+        const params = search ? { search } : {};
+        const response = await apiClient.get<{ count: number; results: Dietitian[] }>('/api/v1/hospitals/managed-dietitians/', { params });
+        return response.data;
+    },
+
+    async getManagedPatients(search?: string) {
+        const params = search ? { search } : {};
+        const response = await apiClient.get<{ count: number; results: HospitalManagedPatient[] }>('/api/v1/hospitals/managed-patients/', { params });
         return response.data;
     },
 

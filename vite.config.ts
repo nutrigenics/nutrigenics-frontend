@@ -9,8 +9,30 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes('/node_modules/framer-motion/')) {
+            return 'motion';
+          }
           if (id.includes('/node_modules/recharts/')) {
-            return 'recharts';
+            return 'charts';
+          }
+          if (
+            id.includes('/node_modules/react-markdown/') ||
+            id.includes('/node_modules/remark-gfm/') ||
+            id.includes('/node_modules/rehype-raw/')
+          ) {
+            return 'markdown';
+          }
+          if (id.includes('/node_modules/xlsx/')) {
+            return 'xlsx';
+          }
+          if (id.includes('/node_modules/lucide-react/')) {
+            return 'icons';
+          }
+          if (id.includes('/node_modules/@radix-ui/')) {
+            return 'radix';
+          }
+          if (id.includes('/node_modules/react-use-websocket/')) {
+            return 'chat';
           }
         },
       },
