@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import logo from '@/assets/logo.svg';
+import { normalizeUserRole } from '@/lib/auth-routing';
 
 interface SidebarProps {
     isMobileOpen?: boolean;
@@ -71,25 +72,24 @@ export function Sidebar({ isMobileOpen, onMobileClose, pendingRequestsCount = 0 
     const location = useLocation();
     const navigate = useNavigate();
     const { logout, user } = useAuth();
+    const resolvedRole = normalizeUserRole(user);
 
     // Determine which nav items to show based on user role
     const getNavItems = () => {
-        // Default to public/patient items if no role found (or handle strictly)
-        if (!user?.role) return patientNavItems;
+        if (!resolvedRole) return [];
 
-        switch (user.role) {
+        switch (resolvedRole) {
             case 'dietitian':
                 return dietitianNavItems;
             case 'hospital':
                 return hospitalNavItems;
-            case 'patient':
             default:
                 return patientNavItems;
         }
     };
 
     const mainNavItems = getNavItems();
-    const allNavItems = [...mainNavItems, ...getCommonNavItems(user?.role)];
+    const allNavItems = [...mainNavItems, ...getCommonNavItems(resolvedRole ?? undefined)];
 
     const handleLogout = async () => {
         try {

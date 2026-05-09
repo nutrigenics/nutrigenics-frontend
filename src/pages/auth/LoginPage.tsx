@@ -30,12 +30,8 @@ export default function LoginPage() {
         }
         setIsLoading(true);
         try {
-            const isOnboarded = await login(email, password);
-            if (isOnboarded) {
-                navigate('/');
-            } else {
-                navigate('/onboarding');
-            }
+            const { redirectPath } = await login(email, password);
+            navigate(redirectPath, { replace: true });
         } catch (err: any) {
             setError(
                 err.response?.data?.error ||
@@ -53,8 +49,8 @@ export default function LoginPage() {
             setIsLoading(true);
             setError(null);
 
-            const isOnboarded = await guestLogin();
-            navigate(isOnboarded ? '/' : '/onboarding');
+            const { redirectPath } = await guestLogin();
+            navigate(redirectPath, { replace: true });
         } catch (err: any) {
             setError(
                 err.response?.data?.error ||

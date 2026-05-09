@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { getPostAuthPath, getRoleHomePath, normalizeUserRole } from '@/lib/auth-routing';
 
 interface ProtectedRouteProps {
     role?: 'patient' | 'dietitian' | 'hospital';
@@ -7,7 +8,8 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ role, redirectTo = '/login' }: ProtectedRouteProps) {
-    const { isAuthenticated, isLoading, user } = useAuth();
+    const { isAuthenticated, isLoading, isOnboarded, user } = useAuth();
+    const resolvedRole = normalizeUserRole(user);
 
     if (isLoading) {
         return (
@@ -25,15 +27,17 @@ export function ProtectedRoute({ role, redirectTo = '/login' }: ProtectedRoutePr
         return <Navigate to={redirectTo} replace />;
     }
 
+    if (!isOnboarded) {
+        return <Navigate to={getPostAuthPath(resolvedRole, false)} replace />;
+    }
+
+    if (!resolvedRole) {
+        return <Navigate to="/login" replace />;
+    }
+
     // Check role-based access
-    if (role && user?.role !== role) {
-        // Redirect to appropriate dashboard based on user role
-        const dashboardRoutes = {
-            patient: '/dashboard',
-            dietitian: '/dietitian/dashboard',
-            hospital: '/hospital/dashboard',
-        };
-        return <Navigate to={dashboardRoutes[user?.role || 'patient']} replace />;
+    if (role && resolvedRole !== role) {
+        return <Navigate to={getRoleHomePath(resolvedRole) ?? '/login'} replace />;
     }
 
     return <Outlet />;

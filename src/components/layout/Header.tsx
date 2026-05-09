@@ -17,6 +17,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import React, { useEffect, useState } from 'react';
+import { getRoleProfilePath, normalizeUserRole } from '@/lib/auth-routing';
 
 interface HeaderProps {
     onMobileMenuToggle?: () => void;
@@ -28,6 +29,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     const location = useLocation();
     const [notifOpen, setNotifOpen] = useState(false);
     const [currentTime, setCurrentTime] = useState(() => Date.now());
+    const resolvedRole = normalizeUserRole(user);
 
     useEffect(() => {
         const intervalId = window.setInterval(() => setCurrentTime(Date.now()), 60_000);
@@ -36,14 +38,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
 
     // Get profile URL based on role
     const getProfileUrl = () => {
-        switch (user?.role) {
-            case 'dietitian':
-                return '/dietitian/profile';
-            case 'hospital':
-                return '/hospital/profile';
-            default:
-                return '/profile';
-        }
+        return getRoleProfilePath(resolvedRole) ?? '/login';
     };
 
     // Get first letter of first name for avatar
@@ -269,7 +264,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
                     </Popover>
 
                     {/* Search Button - Only for patients */}
-                    {user?.role === 'patient' && (
+                    {resolvedRole === 'patient' && (
                         <div className="relative group">
                             <Link
                                 to="/search"

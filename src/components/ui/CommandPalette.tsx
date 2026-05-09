@@ -14,6 +14,7 @@ import {
     FileText
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { normalizeUserRole } from "@/lib/auth-routing";
 
 import {
     CommandDialog,
@@ -30,6 +31,7 @@ export function CommandPalette() {
     const [open, setOpen] = useState(false);
     const navigate = useNavigate();
     const { user } = useAuth();
+    const resolvedRole = normalizeUserRole(user);
 
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
@@ -48,7 +50,7 @@ export function CommandPalette() {
         command();
     };
 
-    if (!user) return null;
+    if (!resolvedRole) return null;
 
     const patientCommands = {
         navigation: [
@@ -93,7 +95,7 @@ export function CommandPalette() {
         hospital: hospitalCommands,
     };
 
-    const commands = commandMap[user.role as keyof typeof commandMap] || patientCommands;
+    const commands = commandMap[resolvedRole];
 
     return (
         <CommandDialog open={open} onOpenChange={setOpen}>

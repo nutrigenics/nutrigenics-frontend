@@ -32,6 +32,7 @@ import { AuthCard } from '@/components/auth/AuthCard';
 import { AuthHeader } from '@/components/auth/AuthHeader';
 import { AuthFooter } from '@/components/auth/AuthFooter';
 import type { DietitianOnboardingData, HospitalOnboardingData } from '@/types';
+import { getRoleHomePath, normalizeUserRole } from '@/lib/auth-routing';
 
 // Types
 interface ReferenceData {
@@ -56,24 +57,23 @@ const ACTIVITY_LEVEL_LABELS = {
 export default function OnboardingPage() {
     const navigate = useNavigate();
     const { user, refreshUser } = useAuth();
+    const normalizedUserRole = normalizeUserRole(user);
 
     // Use user role if available, otherwise default to empty
-    const initialRole = (user?.role && ['patient', 'dietitian', 'hospital'].includes(user.role))
-        ? user.role as 'patient' | 'dietitian' | 'hospital'
-        : '';
+    const initialRole = normalizedUserRole ?? '';
+
+    // Role Selection
+    const [selectedRole, setSelectedRole] = useState<'patient' | 'dietitian' | 'hospital' | ''>(initialRole);
 
     // Reference data (Patient) moved to existing declaration below
 
     // Initial role Effect
     useEffect(() => {
-        if (user?.role && ['patient', 'dietitian', 'hospital'].includes(user.role)) {
+        if (normalizedUserRole) {
             // Already set via initial state, but ensure sync if user loads late
-            if (selectedRole === '') setSelectedRole(user.role as any);
+            if (selectedRole === '') setSelectedRole(normalizedUserRole);
         }
-    }, [user]);
-
-    // Role Selection
-    const [selectedRole, setSelectedRole] = useState<'patient' | 'dietitian' | 'hospital' | ''>(initialRole);
+    }, [normalizedUserRole, selectedRole]);
 
     // Current step - Start at 1 if role is pre-selected, else 0
     const [currentStep, setCurrentStep] = useState(initialRole ? 1 : 0);
@@ -119,6 +119,7 @@ export default function OnboardingPage() {
     // Reference data (Patient)
     const [referenceData, setReferenceData] = useState<ReferenceData | null>(null);
     const [loadingReferenceData, setLoadingReferenceData] = useState(false);
+    const [referenceWarning, setReferenceWarning] = useState<string | null>(null);
 
     // UI state
     const [error, setError] = useState<string | null>(null);
@@ -138,31 +139,16 @@ export default function OnboardingPage() {
             setLoadingReferenceData(true);
             const response = await authService.getReferenceData();
             setReferenceData(response);
+            const hasOptions = response.allergies.length > 0 || response.cuisines.length > 0 || response.diets.length > 0;
+            setReferenceWarning(
+                hasOptions
+                    ? null
+                    : 'Preference options are not loaded in this environment yet. Load the reference data fixture into the backend database to enable allergy, cuisine, and diet selections.'
+            );
         } catch (err) {
             console.error('Failed to fetch reference data:', err);
-            // Use fallback data if API fails
-            setReferenceData({
-                allergies: [
-                    { id: 1, name: 'Gluten' },
-                    { id: 2, name: 'Dairy' },
-                    { id: 3, name: 'Nuts' },
-                    { id: 4, name: 'Eggs' },
-                    { id: 5, name: 'Soy' },
-                    { id: 6, name: 'Shellfish' },
-                    { id: 7, name: 'Fish' },
-                    { id: 8, name: 'Wheat' },
-                ],
-                cuisines: [
-                    { id: 1, name: 'Italian' },
-                    { id: 2, name: 'Mexican' },
-                    { id: 3, name: 'Indian' },
-                ],
-                diets: [
-                    { id: 1, name: 'Vegetarian' },
-                    { id: 2, name: 'Vegan' },
-                    { id: 3, name: 'Keto' },
-                ],
-            });
+            setReferenceData({ allergies: [], cuisines: [], diets: [] });
+            setReferenceWarning('We could not load the preference options right now. Try again after the backend reference data is available.');
         } finally {
             setLoadingReferenceData(false);
         }
@@ -322,11 +308,7 @@ export default function OnboardingPage() {
             await authService.completeOnboarding(payload, selectedRole as any);
             await refreshUser();
 
-            // Navigate based on role
-            if (selectedRole === 'patient') navigate('/');
-            else if (selectedRole === 'dietitian') navigate('/dietitian/dashboard');
-            else if (selectedRole === 'hospital') navigate('/hospital/dashboard');
-            else navigate('/');
+            navigate(getRoleHomePath(selectedRole || normalizedUserRole) ?? '/login', { replace: true });
 
         } catch (err: any) {
             setError(err.response?.data?.message || err.response?.data?.detail || 'Failed to complete onboarding. Please try again.');
@@ -368,6 +350,15 @@ export default function OnboardingPage() {
         >
             {name}
         </button>
+    );
+
+    const ReferenceOptionsEmptyState = ({ label }: { label: string }) => (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+            <p className="font-semibold">{label} options are not available yet.</p>
+            <p className="mt-1 text-amber-800">
+                This environment is missing the onboarding reference data. Load the backend reference fixture, then refresh this page.
+            </p>
+        </div>
     );
 
     const UnitToggle = ({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (value: string) => void }) => (
@@ -431,6 +422,7 @@ export default function OnboardingPage() {
                         title={currentStepData.title}
                         subtitle={currentStepData.subtitle}
                         delay={0.1}
+                        className="max-w-xl lg:max-w-3xl"
                     >
                         {/* Progress Bar (Only for multi-step patient flow or if > 1 step) */}
                         {steps.length > 2 && (
@@ -457,6 +449,12 @@ export default function OnboardingPage() {
                         {error && (
                             <Alert variant="destructive" className="mb-6 bg-red-50 border-red-100 text-red-600">
                                 <AlertDescription>{error}</AlertDescription>
+                            </Alert>
+                        )}
+
+                        {referenceWarning && selectedRole === 'patient' && (
+                            <Alert className="mb-6 border-amber-200 bg-amber-50 text-amber-900">
+                                <AlertDescription>{referenceWarning}</AlertDescription>
                             </Alert>
                         )}
 
@@ -701,31 +699,43 @@ export default function OnboardingPage() {
                                             {currentStepData.id === 'allergies' && (
                                                 <div>
                                                     <p className="text-sm text-gray-500 mb-4">Select any allergies you have (optional)</p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {referenceData?.allergies.map(allergy => (
-                                                            <SelectableChip key={allergy.id} name={allergy.name} selected={selectedAllergies.includes(allergy.id)} onToggle={() => toggleSelection(allergy.id, selectedAllergies, setSelectedAllergies)} />
-                                                        ))}
-                                                    </div>
+                                                    {referenceData?.allergies.length ? (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {referenceData.allergies.map(allergy => (
+                                                                <SelectableChip key={allergy.id} name={allergy.name} selected={selectedAllergies.includes(allergy.id)} onToggle={() => toggleSelection(allergy.id, selectedAllergies, setSelectedAllergies)} />
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <ReferenceOptionsEmptyState label="Allergy" />
+                                                    )}
                                                 </div>
                                             )}
                                             {currentStepData.id === 'cuisines' && (
                                                 <div>
                                                     <p className="text-sm text-gray-500 mb-4">Select your favorite cuisines (optional)</p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {referenceData?.cuisines.map(cuisine => (
-                                                            <SelectableChip key={cuisine.id} name={cuisine.name} selected={selectedCuisines.includes(cuisine.id)} onToggle={() => toggleSelection(cuisine.id, selectedCuisines, setSelectedCuisines)} />
-                                                        ))}
-                                                    </div>
+                                                    {referenceData?.cuisines.length ? (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {referenceData.cuisines.map(cuisine => (
+                                                                <SelectableChip key={cuisine.id} name={cuisine.name} selected={selectedCuisines.includes(cuisine.id)} onToggle={() => toggleSelection(cuisine.id, selectedCuisines, setSelectedCuisines)} />
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <ReferenceOptionsEmptyState label="Cuisine" />
+                                                    )}
                                                 </div>
                                             )}
                                             {currentStepData.id === 'diets' && (
                                                 <div>
                                                     <p className="text-sm text-gray-500 mb-4">Select any dietary preferences (optional)</p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {referenceData?.diets.map(diet => (
-                                                            <SelectableChip key={diet.id} name={diet.name} selected={selectedDiets.includes(diet.id)} onToggle={() => toggleSelection(diet.id, selectedDiets, setSelectedDiets)} />
-                                                        ))}
-                                                    </div>
+                                                    {referenceData?.diets.length ? (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {referenceData.diets.map(diet => (
+                                                                <SelectableChip key={diet.id} name={diet.name} selected={selectedDiets.includes(diet.id)} onToggle={() => toggleSelection(diet.id, selectedDiets, setSelectedDiets)} />
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <ReferenceOptionsEmptyState label="Diet" />
+                                                    )}
                                                 </div>
                                             )}
                                             {currentStepData.id === 'consent' && (

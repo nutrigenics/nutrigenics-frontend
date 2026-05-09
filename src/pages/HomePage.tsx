@@ -1,13 +1,14 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { getPostAuthPath, normalizeUserRole } from '@/lib/auth-routing';
 
 /**
  * HomePage acts as a role-based router that redirects users
  * to their appropriate dashboard based on their role.
  */
 export default function HomePage() {
-    const { user, isLoading } = useAuth();
+    const { user, isLoading, isOnboarded } = useAuth();
 
     if (isLoading) {
         return (
@@ -17,16 +18,5 @@ export default function HomePage() {
         );
     }
 
-    // Redirect based on user role
-    switch (user?.role) {
-        case 'dietitian':
-            return <Navigate to="/dietitian/dashboard" replace />;
-        case 'hospital':
-            return <Navigate to="/hospital/dashboard" replace />;
-        case 'patient':
-        default:
-            // For patients, guests, and any other users - show patient dashboard
-            // We use lazy import to avoid circular dependencies
-            return <Navigate to="/dashboard" replace />;
-    }
+    return <Navigate to={getPostAuthPath(normalizeUserRole(user), isOnboarded)} replace />;
 }
