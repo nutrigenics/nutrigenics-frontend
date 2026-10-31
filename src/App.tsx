@@ -64,6 +64,7 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const ContactPage = lazy(() => import('@/pages/ContactPage'));
 const TermsPage = lazy(() => import('@/pages/TermsPage'));
 const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'));
+const DisclaimerPage = lazy(() => import('@/pages/DisclaimerPage'));
 const AboutPage = lazy(() => import('@/pages/AboutPage'));
 
 
@@ -92,6 +93,7 @@ function App() {
                 <Route path="/help" element={<Navigate to="/contact" replace />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/disclaimer" element={<DisclaimerPage />} />
 
                 {/* Protected Route (Role Redirect Entry) */}
                 <Route element={<ProtectedRoute />}>

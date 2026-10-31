@@ -6,9 +6,10 @@ interface AuthCardProps {
     title?: string;
     subtitle?: string;
     delay?: number;
+    className?: string;
 }
 
-export const AuthCard = ({ children, title, subtitle, delay = 0 }: AuthCardProps) => {
+export const AuthCard = ({ children, title, subtitle, delay = 0, className }: AuthCardProps) => {
     return (
         <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -18,7 +19,7 @@ export const AuthCard = ({ children, title, subtitle, delay = 0 }: AuthCardProps
                 delay,
                 ease: [0.16, 1, 0.3, 1]
             }}
-            className="w-full max-w-md h-full"
+            className={className ? `w-full ${className} h-full` : "w-full max-w-md h-full"}
         >
             <div className="relative group">
                 {/* Glow effect background */}

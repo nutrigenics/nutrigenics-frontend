@@ -17,6 +17,8 @@ export function AuthFooter() {
                     <div className="w-1 h-1 bg-gray-300 rounded-full" />
                     <Link to="/terms" className="hover:text-primary transition-colors link-underline">Terms of Service</Link>
                     <div className="w-1 h-1 bg-gray-300 rounded-full" />
+                    <Link to="/disclaimer" className="hover:text-primary transition-colors link-underline">Medical Disclaimer</Link>
+                    <div className="w-1 h-1 bg-gray-300 rounded-full" />
                     <Link to="/contact" className="hover:text-primary transition-colors link-underline">Support</Link>
                 </div>
 

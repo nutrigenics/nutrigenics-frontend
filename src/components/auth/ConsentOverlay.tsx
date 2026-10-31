@@ -110,7 +110,7 @@ export const ConsentOverlay = () => {
                                     )}
                                 </Button>
 
-                                <div className="flex items-center justify-center gap-6">
+                                <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap">
                                     <a href="/privacy" className="text-sm font-medium text-gray-400 hover:text-teal-600 flex items-center gap-1 transition-colors">
                                         Privacy Policy
                                         <ExternalLink className="w-3 h-3" />
@@ -118,6 +118,11 @@ export const ConsentOverlay = () => {
                                     <div className="w-1 h-1 rounded-full bg-gray-200" />
                                     <a href="/terms" className="text-sm font-medium text-gray-400 hover:text-teal-600 flex items-center gap-1 transition-colors">
                                         Clinical Terms
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                    <div className="w-1 h-1 rounded-full bg-gray-200" />
+                                    <a href="/disclaimer" className="text-sm font-medium text-gray-400 hover:text-teal-600 flex items-center gap-1 transition-colors">
+                                        Disclaimer
                                         <ExternalLink className="w-3 h-3" />
                                     </a>
                                 </div>
